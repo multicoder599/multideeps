@@ -898,11 +898,20 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
-        // ROBUST DEDUP: force numeric ID, keep first occurrence
+        const platformRegex = /twitter|x|tweet|facebook|fb|page|tiktok|instagram|ig|youtube|yt|telegram|tg|reddit|snapchat|snap|whatsapp|wa/i;
+        const actionRegex = /follower|subscriber|sub|view|like|comment/i;
+
         const uniqueMap = new Map();
         for (const s of services) {
             const id = Number(s.service);
             if (!id || uniqueMap.has(id)) continue;
+
+            const text = `${s.category || ''} ${s.name || ''}`;
+            const hasPlatform = platformRegex.test(text);
+            const hasAction = actionRegex.test(text);
+
+            if (!hasPlatform || !hasAction) continue;
+
             uniqueMap.set(id, {
                 serviceId: id,
                 name: String(s.name || ''),
