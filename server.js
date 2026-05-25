@@ -898,36 +898,31 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
-        // Platforms we sell
         const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
-        
-        // Actions we sell
-        const actions = ['followers', 'subscribers', 'views', 'likes', 'comments'];
-        
-        // EXCLUDE anything with these words (countries, flags, niche actions)
+        // "members" catches Telegram subs; rest are standard
+        const actions = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
+
+        // ONLY ban: country names/flags + unwanted service types (NOT quality words like "guaranteed", "real", "hq")
         const banned = [
+            // Countries & flags
             'nigeria', 'nigerian', '🇳🇬', 'brazil', 'brazilian', '🇧🇷', 'india', 'indian', '🇮🇳',
             'russia', 'russian', '🇷🇺', 'ukraine', 'ukrainian', '🇺🇦', 'usa', 'american', 'united states', '🇺🇸',
             'turkey', 'turkish', '🇹🇷', 'france', 'french', '🇫🇷', 'china', 'chinese', '🇨🇳',
             'japan', 'japanese', '🇯🇵', 'korea', 'korean', '🇰🇷', 'vietnam', 'vietnamese', '🇻🇳',
             'bangladesh', 'indonesia', 'italy', 'italian', 'pakistan', 'pakistani', 'philippines', 'filipino',
-            'saudi', 'arabia', 'arab', 'arabic', 'taiwan', 'taiwanese', 'thailand', 'thai', 'uae', 'emirates',
-            'germany', 'german', 'uk', 'british', 'spain', 'spanish', 'mexico', 'mexican', 'canada', 'canadian',
-            'europe', 'european', 'africa', 'asia', 'bangladesh', 'worldwide', 'global', 'geo targeted',
-            'live stream', 'livestream', 'live', 'premiere', 'watchtime', 'watch hours', 'saves', 'shares',
-            'bookmarks', 'retweets', 'quote', 'impressions', 'poll', 'vote', 'space listeners', 'trend topic',
-            'dislikes', 'story views', 'story', 'mass dm', 'bot start', 'boost channel', 'reactions',
-            'comments likes', 'comments replay', 'social shares', 'referrer', 'seo', 'ads', 'adwords',
-            'monetization', 'monetizable', 'organic discovery', 'keyword', 'retention', 'ctr', 'concurrent',
-            'pk battle', 'auto post', 'auto likes', 'auto views', 'auto services', 'emergency', 'verified',
-            'nft', 'tweets', 'tweet', 'gradual', 'interactions', 'post views', 'video views', 'other service',
-            'packages', 'package', 'mix seo', 'premium members', 'premium views', 'story services',
-            'shorts', 'community', 'extended', 'dislikes', 'native ads', 'rav', 'apv', 'gs', 'mts', 'mms',
-            'cheapest', 'guaranteed', 'no refill', 'no drop', 'targeted', 'real', 'hq', 'medium quality',
+            'saudi', 'arabia', 'taiwan', 'thailand', 'uae', 'emirates', 'germany', 'german', 'uk', 'british',
+            'spain', 'spanish', 'mexico', 'mexican', 'canada', 'canadian', 'europe', 'european', 'africa', 'asia',
+            // Unwanted service types only
+            'shares', 'saves', 'bookmarks', 'retweets', 'impressions', 'poll', 'vote', 'space listeners',
+            'trend topic', 'dislikes', 'mass dm', 'bot start', 'boost channel', 'reactions', 'comments likes',
+            'comments replay', 'social shares', 'live stream', 'livestream', 'premiere', 'watchtime',
+            'watch hours', 'seo', 'adwords', 'monetization', 'monetizable', 'organic discovery', 'keyword',
+            'retention', 'ctr', 'concurrent', 'pk battle', 'auto post', 'auto likes', 'auto views', 'emergency',
+            'nft', 'gradual tweet', 'interactions', 'other service', 'packages', 'mix seo', 'premium members',
+            'premium views', 'shorts', 'community', 'extended', 'native ads', 'rav', 'apv', 'gs', 'mts', 'mms',
             'by gender', 'by niche', 'by retention', 'from referrer', 'search engine', 'shopping', 'forum',
-            'news', 'social media', 'refill button', 'lifetime', '365 days', '30 days', '100 days', '365',
-            'by keywords', 'by topic', 'suggest by ai', 'created by ai', 'powerd by ai', 'ai generated',
-            'ai smart', 'auto future', 'discussion with members', 'search ranking', 'online accounts',
+            'news', 'social media', 'by keywords', 'by topic', 'suggest by ai', 'created by ai', 'powerd by ai',
+            'ai generated', 'ai smart', 'auto future', 'discussion', 'search ranking', 'online accounts',
             'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone'
         ];
 
@@ -938,15 +933,12 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
 
             const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
 
-            // Must have platform
             const hasPlatform = platforms.some(p => text.includes(p));
             if (!hasPlatform) continue;
 
-            // Must have action
             const hasAction = actions.some(a => text.includes(a));
             if (!hasAction) continue;
 
-            // Must NOT have banned words
             const hasBanned = banned.some(b => text.includes(b));
             if (hasBanned) continue;
 
@@ -969,7 +961,7 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             await Service.insertMany(cleanServices, { ordered: false });
         }
 
-        console.log(`[SYNC] ${services.length} raw → ${cleanServices.length} filtered for Kenya market`);
+        console.log(`[SYNC] ${services.length} raw → ${cleanServices.length} filtered`);
         res.json({ success: true, count: cleanServices.length });
     } catch (err) {
         console.error('Sync error:', err.message);
