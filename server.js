@@ -527,20 +527,38 @@ bot.command("owner", async (ctx) => {
 });
 
 // ==========================================
-// CALLBACKS
+// CALLBACKS — SINGLE HANDLER (FIXED)
 // ==========================================
 bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
+    const userId = ctx.from.id;
+
+    // ALWAYS answer callback query immediately to prevent loading spinner
+    try { await ctx.answerCallbackQuery(); } catch (e) {}
+
     const store = await getDefaultStore();
+    const customerState = customerPendingInputs.get(userId);
+
+    // --- CONFIRM PAY (merged here to ensure it always fires) ---
+    if (data === 'confirm_pay') {
+        if (!customerState || customerState.action !== 'awaiting_payment_confirm') {
+            await ctx.reply("⚠️ Session expired. Please start over with /start");
+            return;
+        }
+        customerState.action = 'awaiting_payment_phone';
+        await ctx.reply(
+            `💳 *Payment*\n\nEnter your M-Pesa number:\nFormat: 07XXXXXXXX or 01XXXXXXXX`,
+            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+        );
+        return;
+    }
 
     // --- OWNER CALLBACKS ---
-    if (ADMIN_IDS.includes(ctx.from.id)) {
+    if (ADMIN_IDS.includes(userId)) {
         if (data === 'preview_store') {
-            await ctx.answerCallbackQuery("Opening customer view...");
             return showCustomerMenu(ctx);
         }
         if (data === 'owner_services') {
-            await ctx.answerCallbackQuery("Open dashboard");
             await ctx.reply(`🛒 *Service Catalog*\n\nOpen your dashboard to enable services and set prices 👇`, {
                 parse_mode: "Markdown",
                 reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL } })
@@ -548,7 +566,6 @@ bot.on('callback_query:data', async (ctx) => {
             return;
         }
         if (data === 'owner_orders') {
-            ctx.answerCallbackQuery().catch(()=>{});
             const orders = await Order.find({ botId: store._id }).sort({ createdAt: -1 }).limit(15);
             let text = `📋 *Recent Orders*\n\n`;
             if (orders.length === 0) text += `_No orders yet._`;
@@ -561,7 +578,6 @@ bot.on('callback_query:data', async (ctx) => {
             return;
         }
         if (data === 'owner_stats') {
-            ctx.answerCallbackQuery().catch(()=>{});
             const totalOrders = await Order.countDocuments({ botId: store._id });
             const completedOrders = await Order.countDocuments({ botId: store._id, status: 'Completed' });
             const totalRevenue = await Transaction.aggregate([{ $match: { botId: store._id, status: 'completed' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]);
@@ -572,7 +588,7 @@ bot.on('callback_query:data', async (ctx) => {
             return;
         }
         if (data === 'owner_payment') {
-            adminUserState.set(ctx.from.id, { action: 'payment_menu' });
+            adminUserState.set(userId, { action: 'payment_menu' });
             const hasConfig = store.megapayApiKey && store.megapayEmail;
             const webhookDisplay = `${APP_URL}/api/megapay/webhook`;
             const keyboard = new InlineKeyboard()
@@ -586,17 +602,17 @@ bot.on('callback_query:data', async (ctx) => {
             return;
         }
         if (data === 'set_megapay_key') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_megapay_key' });
+            adminUserState.set(userId, { action: 'awaiting_megapay_key' });
             await ctx.reply(`🔑 *Set Megapay API Key*\n\nPaste your key below 👇`, { parse_mode: "Markdown" });
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'set_megapay_email') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_megapay_email' });
+            adminUserState.set(userId, { action: 'awaiting_megapay_email' });
             await ctx.reply(`📧 *Set Megapay Email*\n\nPaste your email below 👇`, { parse_mode: "Markdown" });
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'owner_settings') {
-            adminUserState.set(ctx.from.id, { action: 'settings_menu' });
+            adminUserState.set(userId, { action: 'settings_menu' });
             const keyboard = new InlineKeyboard()
                 .text("📝 Edit Store Name", "edit_name").row()
                 .text("💬 Edit Welcome Msg", "edit_welcome").row()
@@ -604,10 +620,9 @@ bot.on('callback_query:data', async (ctx) => {
                 .text("🖼️ Set Banner", "edit_banner").row()
                 .text("🔙 Back", "owner_back");
             await ctx.reply(`⚙️ *Store Settings*`, { parse_mode: "Markdown", reply_markup: keyboard });
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'owner_pricing') {
-            ctx.answerCallbackQuery().catch(()=>{});
             const cfg = store.pricingConfig || {};
             const tiers = cfg.tiers || [];
             let text = `💰 *Auto-Pricing Config*\n\nExchange Rate: *${cfg.exchangeRate || 130}* KES per unit\nMarkup: *${((cfg.markupMultiplier || 1.4) * 100 - 100).toFixed(0)}%* profit margin\n\n*Tiers:*\n`;
@@ -622,49 +637,45 @@ bot.on('callback_query:data', async (ctx) => {
             return;
         }
         if (data === 'edit_name') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_store_name' });
+            adminUserState.set(userId, { action: 'awaiting_store_name' });
             await ctx.reply("📝 Enter new store name:");
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'edit_welcome') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_welcome_msg' });
+            adminUserState.set(userId, { action: 'awaiting_welcome_msg' });
             await ctx.reply("💬 Enter new welcome message:");
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'edit_support') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_support_link' });
+            adminUserState.set(userId, { action: 'awaiting_support_link' });
             await ctx.reply("🔗 Enter support link (e.g. https://t.me/yourusername):");
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'edit_banner') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_banner' });
+            adminUserState.set(userId, { action: 'awaiting_banner' });
             await ctx.reply("🖼️ Send a banner image URL:");
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'owner_broadcast') {
-            adminUserState.set(ctx.from.id, { action: 'awaiting_broadcast_msg' });
+            adminUserState.set(userId, { action: 'awaiting_broadcast_msg' });
             await ctx.reply("📢 *Broadcast to all customers*\n\nType your message:", { parse_mode: "Markdown" });
-            return ctx.answerCallbackQuery();
+            return;
         }
         if (data === 'owner_back' || data === 'open_dashboard') {
-            ctx.answerCallbackQuery().catch(()=>{});
             return handleStart(ctx);
         }
     }
 
     // --- CUSTOMER CALLBACKS ---
     if (data === 'back_start') {
-        ctx.answerCallbackQuery().catch(()=>{});
         return showCustomerMenu(ctx);
     }
 
     if (data === 'back_platforms') {
-        ctx.answerCallbackQuery().catch(()=>{});
         return showCustomerMenu(ctx);
     }
 
     if (data.startsWith('plat_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
         const platform = data.replace('plat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
         const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
@@ -682,7 +693,6 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     if (data.startsWith('type_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
         const parts = data.replace('type_', '').split('_');
         const platform = parts[0];
         const type = parts[1];
@@ -694,7 +704,6 @@ bot.on('callback_query:data', async (ctx) => {
         const keyboard = new InlineKeyboard();
         const cfg = store.pricingConfig || {};
 
-        // Show each service with clean name and price
         for (const s of filtered) {
             const displayName = s.displayName || cleanServiceName(s);
             const tier = cfg.tiers?.[0];
@@ -712,7 +721,6 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     if (data.startsWith('svc_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
         const serviceId = parseInt(data.replace('svc_', ''));
         const svc = await Service.findOne({ serviceId });
         if (!svc) return ctx.reply("❌ Service not found.");
@@ -738,7 +746,6 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     if (data.startsWith('tier_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
         const match = data.match(/tier_(\d+)_(.+)/);
         if (!match) return;
         const serviceId = parseInt(match[1]);
@@ -753,7 +760,7 @@ bot.on('callback_query:data', async (ctx) => {
 
         const displayName = svc.displayName || cleanServiceName(svc);
 
-        customerPendingInputs.set(ctx.from.id, {
+        customerPendingInputs.set(userId, {
             action: 'awaiting_qty_in_tier',
             data: { serviceId, tier, serviceName: displayName, platform: detectPlatform(svc), type: detectType(svc), rate: svc.rate, min: svc.min, max: svc.max }
         });
@@ -770,7 +777,6 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     if (data.startsWith('cat_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
         const category = data.replace('cat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
         const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, category });
@@ -995,22 +1001,6 @@ bot.on('message:text', async (ctx) => {
     }
 });
 
-// Handle payment confirmation callback
-bot.on('callback_query:data', async (ctx) => {
-    const data = ctx.callbackQuery.data;
-    const customerState = customerPendingInputs.get(ctx.from.id);
-
-    if (data === 'confirm_pay' && customerState?.action === 'awaiting_payment_confirm') {
-        ctx.answerCallbackQuery().catch(()=>{});
-        customerState.action = 'awaiting_payment_phone';
-        await ctx.reply(
-            `💳 *Payment*\n\nEnter your M-Pesa number:\nFormat: 07XXXXXXXX or 01XXXXXXXX`,
-            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
-        );
-        return;
-    }
-});
-
 // ==========================================
 // WEBHOOK
 // ==========================================
@@ -1232,16 +1222,13 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             const hasBanned = banned.some(b => text.includes(b));
             if (hasBanned) continue;
 
-            // Generate clean display name
             let displayName = cleanServiceName({ category: s.category, name: s.name });
 
-            // Also clean the raw name for admin view
             let cleanName = String(s.name || '');
             qualityWords.forEach(word => {
                 cleanName = cleanName.replace(new RegExp(word, 'gi'), '');
             });
             cleanName = cleanName.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
-            // Remove leftover country flags and extra pipes
             cleanName = cleanName.replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, '').replace(/\s+/g, ' ').trim();
 
             uniqueMap.set(id, {
