@@ -898,16 +898,21 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
-        const platformRegex = /twitter|x|tweet|facebook|fb|page|tiktok|instagram|ig|youtube|yt|telegram|tg|reddit|snapchat|snap|whatsapp|wa/i;
-        const actionRegex = /follower|subscriber|sub|view|like|comment/i;
+        // STRICT: only full platform names (no short tokens like x, fb, ig, yt, wa, sub)
+        const platforms = ['twitter', 'tweet', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
+        const actions = ['follower', 'subscribers', 'subscriber', 'view', 'like', 'comment'];
 
         const uniqueMap = new Map();
         for (const s of services) {
             const id = Number(s.service);
             if (!id || uniqueMap.has(id)) continue;
 
-            const text = `${s.category || ''} ${s.name || ''}`;
-            if (!platformRegex.test(text) || !actionRegex.test(text)) continue;
+            const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
+
+            const hasPlatform = platforms.some(p => text.includes(p));
+            const hasAction = actions.some(a => text.includes(a));
+            
+            if (!hasPlatform || !hasAction) continue;
 
             uniqueMap.set(id, {
                 serviceId: id,
@@ -928,6 +933,7 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             await Service.insertMany(cleanServices, { ordered: false });
         }
 
+        console.log(`[SYNC] Filtered ${services.length} → ${cleanServices.length} services`);
         res.json({ success: true, count: cleanServices.length });
     } catch (err) {
         console.error('Sync error:', err.message);
