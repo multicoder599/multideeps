@@ -334,7 +334,10 @@ const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 
 bot.catch((err) => { console.error(`Bot Error:`, err.message); });
 
-bot.command("start", async (ctx) => {
+// ==========================================
+// REUSABLE START HANDLER
+// ==========================================
+async function handleStart(ctx) {
     const store = await getDefaultStore();
     const isOwner = ADMIN_IDS.includes(ctx.from.id);
 
@@ -376,7 +379,9 @@ bot.command("start", async (ctx) => {
             await ctx.reply(welcomeText, { reply_markup: keyboard });
         }
     } catch (err) { await ctx.reply(welcomeText, { reply_markup: keyboard }); }
-});
+}
+
+bot.command("start", handleStart);
 
 bot.command("owner", async (ctx) => {
     if (!ADMIN_IDS.includes(ctx.from.id)) return ctx.reply("⛔ Owner only.");
@@ -498,7 +503,7 @@ bot.on('callback_query:data', async (ctx) => {
         }
         if (data === 'owner_back' || data === 'open_dashboard') {
             ctx.answerCallbackQuery().catch(()=>{});
-            return bot.command("start")(ctx);
+            return handleStart(ctx);
         }
     }
 
@@ -1067,12 +1072,11 @@ cron.schedule('*/15 * * * *', async () => {
 });
 
 // ==========================================
-// STARTUP — bot.init() BEFORE server starts
+// STARTUP
 // ==========================================
 const PORT = process.env.PORT || 3020;
 
 async function startServer() {
-    // CRITICAL: Initialize bot before accepting webhooks
     try {
         await bot.init();
         console.log(`🤖 Bot initialized: @${bot.botInfo.username}`);
@@ -1085,7 +1089,6 @@ async function startServer() {
         console.log(`🌐 Server listening on port ${PORT}`);
         console.log(`📱 Mini App: ${APP_URL}`);
 
-        // Ensure default store exists
         let store = await BotInstance.findOne({ isDefault: true });
         if (!store) {
             try {
@@ -1109,7 +1112,6 @@ async function startServer() {
             console.log(`✅ Default store loaded: @${store.botUsername}`);
         }
 
-        // Set webhook
         if (APP_URL.startsWith('https://')) {
             try {
                 await bot.api.setWebhook(`${APP_URL}/webhook`);
