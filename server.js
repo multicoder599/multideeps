@@ -907,10 +907,7 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             if (!id || uniqueMap.has(id)) continue;
 
             const text = `${s.category || ''} ${s.name || ''}`;
-            const hasPlatform = platformRegex.test(text);
-            const hasAction = actionRegex.test(text);
-
-            if (!hasPlatform || !hasAction) continue;
+            if (!platformRegex.test(text) || !actionRegex.test(text)) continue;
 
             uniqueMap.set(id, {
                 serviceId: id,
