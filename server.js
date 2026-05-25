@@ -105,6 +105,13 @@ const serviceSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
+const pricingTierSchema = new mongoose.Schema({
+    label: String,
+    minQty: Number,
+    maxQty: Number,
+    multiplier: Number // applied on top of base markup for this tier
+}, { _id: false });
+
 const botInstanceSchema = new mongoose.Schema({
     isDefault: { type: Boolean, default: false },
     botToken: { type: String, required: true },
@@ -112,7 +119,7 @@ const botInstanceSchema = new mongoose.Schema({
     botId: Number,
     status: { type: String, enum: ['active', 'suspended', 'expired'], default: 'active' },
     businessName: { type: String, default: 'My SMM Store' },
-    welcomeMessage: { type: String, default: 'Welcome! Boost your social media presence. Choose a category below.' },
+    welcomeMessage: { type: String, default: 'Welcome! Boost your social media presence. Choose a platform below.' },
     welcomePhoto: { type: String, default: '' },
     bannerImage: { type: String, default: '' },
     adminAlertChatId: String,
@@ -120,6 +127,17 @@ const botInstanceSchema = new mongoose.Schema({
     megapayApiKey: { type: String, default: '' },
     megapayEmail: { type: String, default: '' },
     megapayWebhookUrl: { type: String, default: '' },
+    pricingConfig: {
+        exchangeRate: { type: Number, default: 130 },     // KES per 1 rate unit (usually USD)
+        markupMultiplier: { type: Number, default: 1.4 }, // 1.4 = 40% profit margin
+        tiers: { type: [pricingTierSchema], default: () => [
+            { label: '🔰 Starter', minQty: 100, maxQty: 500, multiplier: 1.0 },
+            { label: '🚀 Growth', minQty: 501, maxQty: 2000, multiplier: 1.0 },
+            { label: '⚡ Bulk', minQty: 2001, maxQty: 5000, multiplier: 0.95 },
+            { label: '💎 Mega', minQty: 5001, maxQty: 10000, multiplier: 0.9 },
+            { label: '👑 Supreme', minQty: 10001, maxQty: 50000, multiplier: 0.85 }
+        ]}
+    },
     enabledServices: [{
         serviceId: Number,
         customPrice: { type: Number, default: 0 },
@@ -225,11 +243,100 @@ async function getOrCreateMerchant(ctx) {
     return merchant;
 }
 
-async function getDefaultStore() {
-    if (!defaultStore) {
+async function getDefaultStore(force = false) {
+    if (!defaultStore || force) {
         defaultStore = await BotInstance.findOne({ isDefault: true });
     }
     return defaultStore;
+}
+
+function invalidateStoreCache() {
+    defaultStore = null;
+}
+
+// Platform & Type detection
+const PLATFORM_META = {
+    instagram: { emoji: '📸', name: 'Instagram' },
+    tiktok:    { emoji: '🎵', name: 'TikTok' },
+    twitter:   { emoji: '🐦', name: 'Twitter / X' },
+    facebook:  { emoji: '📘', name: 'Facebook' },
+    youtube:   { emoji: '▶️', name: 'YouTube' },
+    telegram:  { emoji: '✈️', name: 'Telegram' },
+    reddit:    { emoji: '🔴', name: 'Reddit' },
+    snapchat:  { emoji: '👻', name: 'Snapchat' },
+    whatsapp:  { emoji: '💬', name: 'WhatsApp' }
+};
+
+const SERVICE_TYPES = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
+
+function detectPlatform(service) {
+    const text = `${service.category || ''} ${service.name || ''}`.toLowerCase();
+    for (const key of Object.keys(PLATFORM_META)) {
+        if (text.includes(key)) return key;
+    }
+    return null;
+}
+
+function detectType(service) {
+    const text = `${service.category || ''} ${service.name || ''}`.toLowerCase();
+    for (const type of SERVICE_TYPES) {
+        if (text.includes(type)) return type;
+    }
+    return 'other';
+}
+
+function getPlatformKeyboard(services) {
+    const platforms = new Set();
+    services.forEach(s => {
+        const p = detectPlatform(s);
+        if (p) platforms.add(p);
+    });
+    const keyboard = new InlineKeyboard();
+    const platformList = Array.from(platforms);
+    for (let i = 0; i < platformList.length; i += 2) {
+        const row = [];
+        const p1 = platformList[i];
+        const meta1 = PLATFORM_META[p1];
+        row.push({ text: `${meta1.emoji} ${meta1.name}`, callback_data: `plat_${p1}` });
+        if (platformList[i + 1]) {
+            const p2 = platformList[i + 1];
+            const meta2 = PLATFORM_META[p2];
+            row.push({ text: `${meta2.emoji} ${meta2.name}`, callback_data: `plat_${p2}` });
+        }
+        keyboard.row(...row);
+    }
+    return keyboard;
+}
+
+function getTypeKeyboard(services, platform) {
+    const types = new Set();
+    services.filter(s => detectPlatform(s) === platform).forEach(s => types.add(detectType(s)));
+    const keyboard = new InlineKeyboard();
+    const typeList = Array.from(types);
+    const typeEmojis = {
+        followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧'
+    };
+    for (const t of typeList) {
+        keyboard.text(`${typeEmojis[t] || '🔧'} ${t.charAt(0).toUpperCase() + t.slice(1)}`, `type_${platform}_${t}`).row();
+    }
+    keyboard.text('🔙 Back to Platforms', 'back_platforms');
+    return keyboard;
+}
+
+// Pricing engine
+function calculateKESPrice(rateStr, quantity, pricingConfig) {
+    const rate = parseFloat(rateStr) || 0;
+    if (rate <= 0 || quantity <= 0) return 0;
+    const exchangeRate = pricingConfig?.exchangeRate || 130;
+    const markup = pricingConfig?.markupMultiplier || 1.4;
+    const costPer1kInKES = rate * exchangeRate;
+    const pricePer1kInKES = costPer1kInKES * markup;
+    const total = (pricePer1kInKES / 1000) * quantity;
+    return Math.max(20, Math.ceil(total / 10) * 10); // Min 20 KES, round to nearest 10
+}
+
+function getTierDisplayPrice(rateStr, tierMax, pricingConfig) {
+    return calculateKESPrice(rateStr, tierMax, pricingConfig);
 }
 
 function getOwnerMenu() {
@@ -240,6 +347,7 @@ function getOwnerMenu() {
         .text("📊 Stats", "owner_stats").row()
         .text("💳 Payment Settings", "owner_payment").row()
         .text("⚙️ Store Settings", "owner_settings").row()
+        .text("💰 Pricing Config", "owner_pricing").row()
         .text("📢 Broadcast", "owner_broadcast").row()
         .text("📱 Open Dashboard", "open_dashboard");
 }
@@ -352,10 +460,10 @@ async function showCustomerMenu(ctx) {
     }
 
     const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
-    const categories = [...new Set(services.map(s => s.category))];
-    const keyboard = getCustomerMenu(categories, store.supportLink);
+    const keyboard = getPlatformKeyboard(services);
+    if (store.supportLink) keyboard.row({ text: '💬 Support', url: store.supportLink });
 
-    const welcomeText = store.welcomeMessage;
+    const welcomeText = store.welcomeMessage || "Welcome! Choose a platform to get started:";
     try {
         if (store.welcomePhoto) {
             await ctx.replyWithPhoto(store.welcomePhoto, { caption: welcomeText, reply_markup: keyboard });
@@ -374,7 +482,11 @@ async function handleStart(ctx) {
     const isOwner = ADMIN_IDS.includes(ctx.from.id);
 
     if (isOwner) {
-        const welcomeText = `👋 Hello ${escapeMarkdown(ctx.from.first_name || 'Boss')}!\n\n🤖 *SMM Panel Owner*\n\nManage your store, view orders, and configure services below.`;
+        const welcomeText = `👋 Hello ${escapeMarkdown(ctx.from.first_name || 'Boss')}!
+
+🤖 *SMM Panel Owner*
+
+Manage your store, view orders, and configure services below.`;
         const keyboard = getOwnerMenu();
         try {
             if (defaultStore && defaultStore.welcomePhoto) {
@@ -489,6 +601,21 @@ bot.on('callback_query:data', async (ctx) => {
             await ctx.reply(`⚙️ *Store Settings*`, { parse_mode: "Markdown", reply_markup: keyboard });
             return ctx.answerCallbackQuery();
         }
+        if (data === 'owner_pricing') {
+            ctx.answerCallbackQuery().catch(()=>{});
+            const cfg = store.pricingConfig || {};
+            const tiers = cfg.tiers || [];
+            let text = `💰 *Auto-Pricing Config*\n\nExchange Rate: *${cfg.exchangeRate || 130}* KES per unit\nMarkup: *${((cfg.markupMultiplier || 1.4) * 100 - 100).toFixed(0)}%* profit margin\n\n*Tiers:*\n`;
+            tiers.forEach(t => {
+                text += `• ${t.label}: ${t.minQty.toLocaleString()} - ${t.maxQty.toLocaleString()} (multiplier: ${t.multiplier}x)\n`;
+            });
+            text += `\nTap below to open dashboard and edit:`;
+            await ctx.reply(text, {
+                parse_mode: "Markdown",
+                reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL } })
+            });
+            return;
+        }
         if (data === 'edit_name') {
             adminUserState.set(ctx.from.id, { action: 'awaiting_store_name' });
             await ctx.reply("📝 Enter new store name:");
@@ -521,7 +648,120 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     // --- CUSTOMER CALLBACKS ---
+    if (data === 'back_start') {
+        ctx.answerCallbackQuery().catch(()=>{});
+        return showCustomerMenu(ctx);
+    }
+
+    if (data === 'back_platforms') {
+        ctx.answerCallbackQuery().catch(()=>{});
+        return showCustomerMenu(ctx);
+    }
+
+    if (data.startsWith('plat_')) {
+        ctx.answerCallbackQuery().catch(()=>{});
+        const platform = data.replace('plat_', '');
+        const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
+        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
+        const platformServices = services.filter(s => detectPlatform(s) === platform);
+        if (platformServices.length === 0) {
+            return ctx.reply("❌ No services available for this platform right now.");
+        }
+        const keyboard = getTypeKeyboard(services, platform);
+        const meta = PLATFORM_META[platform];
+        await ctx.reply(
+            `${meta.emoji} *${meta.name}*\n\nChoose the type of service you need:`,
+            { parse_mode: "Markdown", reply_markup: keyboard }
+        );
+        return;
+    }
+
+    if (data.startsWith('type_')) {
+        ctx.answerCallbackQuery().catch(()=>{});
+        const parts = data.replace('type_', '').split('_');
+        const platform = parts[0];
+        const type = parts[1];
+        const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
+        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
+        const filtered = services.filter(s => detectPlatform(s) === platform && detectType(s) === type);
+        if (filtered.length === 0) return ctx.reply("❌ No services found.");
+
+        const keyboard = new InlineKeyboard();
+        const cfg = store.pricingConfig || {};
+        for (const s of filtered) {
+            const tier = cfg.tiers?.[0];
+            const startPrice = tier ? getTierDisplayPrice(s.rate, tier.maxQty, cfg) : '??';
+            keyboard.text(`${escapeMarkdown(s.name)} — from KES ${startPrice}`, `svc_${s.serviceId}`).row();
+        }
+        keyboard.text('🔙 Back', `plat_${platform}`);
+
+        const typeEmojis = { followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧' };
+        await ctx.reply(
+            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a service package:`,
+            { parse_mode: "Markdown", reply_markup: keyboard }
+        );
+        return;
+    }
+
+    if (data.startsWith('svc_')) {
+        ctx.answerCallbackQuery().catch(()=>{});
+        const serviceId = parseInt(data.replace('svc_', ''));
+        const svc = await Service.findOne({ serviceId });
+        if (!svc) return ctx.reply("❌ Service not found.");
+
+        const cfg = store.pricingConfig || {};
+        const tiers = cfg.tiers || [];
+        const keyboard = new InlineKeyboard();
+
+        for (const tier of tiers) {
+            const price = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
+            keyboard.text(`${tier.label}\n${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()} @ KES ${price}`, `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
+        }
+        keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
+
+        let text = `🛒 *${escapeMarkdown(svc.name)}*\n\n`;
+        text += `Platform: ${PLATFORM_META[detectPlatform(svc)]?.emoji || ''} ${PLATFORM_META[detectPlatform(svc)]?.name || detectPlatform(svc)}\n`;
+        text += `Type: ${detectType(svc)}\n`;
+        text += `Min: ${svc.min} | Max: ${svc.max}\n`;
+        text += `Refill: ${svc.refill ? '✅ Yes (30 days)' : '❌ No'}\n\n`;
+        text += `*Select your quantity tier:*`;
+
+        await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
+        return;
+    }
+
+    if (data.startsWith('tier_')) {
+        ctx.answerCallbackQuery().catch(()=>{});
+        const match = data.match(/tier_(\d+)_(.+)/);
+        if (!match) return;
+        const serviceId = parseInt(match[1]);
+        const tierLabel = match[2];
+        const svc = await Service.findOne({ serviceId });
+        if (!svc) return ctx.reply("❌ Service not found.");
+
+        const cfg = store.pricingConfig || {};
+        const tiers = cfg.tiers || [];
+        const tier = tiers.find(t => t.label.replace(/[^a-zA-Z0-9]/g,'') === tierLabel);
+        if (!tier) return ctx.reply("❌ Tier not found.");
+
+        customerPendingInputs.set(ctx.from.id, {
+            action: 'awaiting_qty_in_tier',
+            data: { serviceId, tier, serviceName: svc.name, platform: detectPlatform(svc), type: detectType(svc), rate: svc.rate, min: svc.min, max: svc.max }
+        });
+
+        const priceForMax = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
+        await ctx.reply(
+            `${tier.label} selected ✅\n\n` +
+            `Enter exact quantity between *${tier.minQty.toLocaleString()}* and *${tier.maxQty.toLocaleString()}*\n\n` +
+            `_Price for ${tier.maxQty.toLocaleString()} qty = KES ${priceForMax}_\n` +
+            `_Price scales proportionally with quantity_`,
+            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+        );
+        return;
+    }
+
     if (data.startsWith('cat_')) {
+        // Legacy fallback
         ctx.answerCallbackQuery().catch(()=>{});
         const category = data.replace('cat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
@@ -538,23 +778,6 @@ bot.on('callback_query:data', async (ctx) => {
 
         await ctx.reply(`📂 *${escapeMarkdown(category)}*\n\nSelect a service:`, { parse_mode: "Markdown", reply_markup: keyboard });
         return;
-    }
-
-    if (data.startsWith('svc_')) {
-        ctx.answerCallbackQuery().catch(()=>{});
-        const serviceId = parseInt(data.replace('svc_', ''));
-        const svc = await Service.findOne({ serviceId });
-        if (!svc) return ctx.reply("❌ Service not found.");
-
-        customerPendingInputs.set(ctx.from.id, { action: 'awaiting_link', data: { serviceId } });
-        let text = `🛒 *${escapeMarkdown(svc.name)}*\n\nCategory: ${escapeMarkdown(svc.category)}\nType: ${escapeMarkdown(svc.type)}\nMin: ${svc.min} | Max: ${svc.max}\nRefill: ${svc.refill ? '✅ Yes (30 days)' : '❌ No'}\n\nSend the link or username to promote:`;
-        await ctx.reply(text, { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Back', 'back_start') });
-        return;
-    }
-
-    if (data === 'back_start') {
-        ctx.answerCallbackQuery().catch(()=>{});
-        return showCustomerMenu(ctx);
     }
 });
 
@@ -573,6 +796,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_megapay_key') {
             store.megapayApiKey = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Megapay API Key updated!`);
             return;
@@ -580,6 +804,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_megapay_email') {
             store.megapayEmail = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Megapay Email updated!`);
             return;
@@ -587,6 +812,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_store_name') {
             store.businessName = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Store name updated to *${escapeMarkdown(text)}*!`, { parse_mode: "Markdown" });
             return;
@@ -594,6 +820,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_welcome_msg') {
             store.welcomeMessage = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Welcome message updated!`);
             return;
@@ -601,6 +828,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_support_link') {
             store.supportLink = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Support link updated!`);
             return;
@@ -608,6 +836,7 @@ bot.on('message:text', async (ctx) => {
         if (state.action === 'awaiting_banner') {
             store.bannerImage = text;
             await store.save();
+            invalidateStoreCache();
             adminUserState.delete(ctx.from.id);
             await ctx.reply(`✅ Banner updated!`);
             return;
@@ -630,36 +859,65 @@ bot.on('message:text', async (ctx) => {
 
     // --- CUSTOMER ---
     if (customerState) {
-        if (customerState.action === 'awaiting_link') {
-            customerState.data.link = ctx.message.text.trim();
-            customerState.action = 'awaiting_quantity';
-            const svc = await Service.findOne({ serviceId: customerState.data.serviceId });
-            await ctx.reply(`🔗 Link received.\n\nEnter quantity (min: ${svc.min}, max: ${svc.max}):`);
+        // Quantity within tier
+        if (customerState.action === 'awaiting_qty_in_tier') {
+            const qty = parseInt(ctx.message.text.trim().replace(/,/g, ''));
+            const { serviceId, tier, serviceName, rate, min, max } = customerState.data;
+            const svcMin = parseInt(min) || 100;
+            const svcMax = parseInt(max) || 100000;
+
+            if (isNaN(qty) || qty < tier.minQty || qty > tier.maxQty || qty < svcMin || qty > svcMax) {
+                await ctx.reply(
+                    `❌ Invalid quantity.\n\n` +
+                    `• Tier range: *${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()}*\n` +
+                    `• Service limits: ${svcMin} - ${svcMax}\n\nPlease enter a valid quantity:`,
+                    { parse_mode: "Markdown" }
+                );
+                return;
+            }
+
+            const cfg = store.pricingConfig || {};
+            const tierMultiplier = tier.multiplier || 1.0;
+            const basePrice = calculateKESPrice(rate, qty, cfg);
+            // Apply tier discount/multiplier on top
+            const adjustedPrice = Math.max(20, Math.ceil(basePrice * tierMultiplier / 10) * 10);
+
+            customerState.data.quantity = qty;
+            customerState.data.price = adjustedPrice;
+            customerState.action = 'awaiting_link';
+
+            await ctx.reply(
+                `✅ *Quantity: ${qty.toLocaleString()}*\n` +
+                `💰 *Price: KES ${adjustedPrice}*\n\n` +
+                `Now send the link or username to promote:\n` +
+                `_Examples:_\n` +
+                `• Instagram: \`https://instagram.com/username\`\n` +
+                `• TikTok: \`https://tiktok.com/@username\`\n` +
+                `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
+                `• Telegram: \`https://t.me/channelname\``,
+                { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+            );
             return;
         }
 
-        if (customerState.action === 'awaiting_quantity') {
-            const qty = parseInt(ctx.message.text.trim());
-            const svc = await Service.findOne({ serviceId: customerState.data.serviceId });
-            if (isNaN(qty) || qty < parseInt(svc.min) || qty > parseInt(svc.max)) {
-                await ctx.reply(`❌ Invalid quantity. Must be between ${svc.min} and ${svc.max}.`);
-                return;
-            }
-            const cfg = store.enabledServices.find(s => s.serviceId === customerState.data.serviceId);
-            const pricePer1k = cfg?.customPrice || 0;
-            if (pricePer1k <= 0) {
-                await ctx.reply("❌ This service is not priced yet. Contact support.");
-                customerPendingInputs.delete(ctx.from.id);
-                return;
-            }
-            const price = Math.ceil((pricePer1k * qty) / 1000);
-            customerState.data.quantity = qty;
-            customerState.data.price = price;
-            customerState.data.serviceName = svc.name;
-            customerState.action = 'awaiting_payment_phone';
+        if (customerState.action === 'awaiting_link') {
+            customerState.data.link = ctx.message.text.trim();
+            customerState.action = 'awaiting_payment_confirm';
+            const { serviceName, quantity, price, link } = customerState.data;
+
             await ctx.reply(
-                `💰 *Order Summary*\n\nService: ${escapeMarkdown(svc.name)}\nLink: ${escapeMarkdown(customerState.data.link)}\nQuantity: ${qty}\nPrice: *KES ${price}*\n\nEnter your M-Pesa number:\nFormat: 07XXXXXXXX or 01XXXXXXXX`,
-                { parse_mode: "Markdown" }
+                `📋 *ORDER SUMMARY*\n\n` +
+                `🛒 Service: ${escapeMarkdown(serviceName)}\n` +
+                `🔗 Link: ${escapeMarkdown(link)}\n` +
+                `📊 Quantity: ${quantity.toLocaleString()}\n` +
+                `💰 Total: *KES ${price}*\n\n` +
+                `Tap *PROCEED TO PAY* to continue 👇`,
+                {
+                    parse_mode: "Markdown",
+                    reply_markup: new InlineKeyboard()
+                        .text('💳 PROCEED TO PAY', 'confirm_pay').row()
+                        .text('🔙 Cancel', 'back_start')
+                }
             );
             return;
         }
@@ -673,7 +931,9 @@ bot.on('message:text', async (ctx) => {
             const { serviceId, serviceName, link, quantity, price } = customerState.data;
             const reference = `ORD${Date.now()}`;
 
-            if (!store.megapayApiKey || !store.megapayEmail) {
+            // CRITICAL FIX: Reload store fresh to ensure Megapay config is current
+            const freshStore = await getDefaultStore(true);
+            if (!freshStore.megapayApiKey || freshStore.megapayApiKey.length < 10 || !freshStore.megapayEmail || !freshStore.megapayEmail.includes('@')) {
                 await ctx.reply("⚠️ Payment not configured. Please contact support.");
                 customerPendingInputs.delete(ctx.from.id);
                 return;
@@ -681,18 +941,18 @@ bot.on('message:text', async (ctx) => {
 
             try {
                 await PendingTransaction.create({
-                    reference, type: 'order', phone, amount: price, botId: store._id,
+                    reference, type: 'order', phone, amount: price, botId: freshStore._id,
                     customerTelegramId: ctx.from.id, customerChatId: ctx.chat.id,
                     serviceId, serviceName, link, quantity
                 });
 
                 const payload = {
-                    api_key: store.megapayApiKey,
-                    email: store.megapayEmail,
+                    api_key: freshStore.megapayApiKey,
+                    email: freshStore.megapayEmail,
                     amount: price,
                     msisdn: phone,
-                    callback_url: store.megapayWebhookUrl || `${APP_URL}/api/megapay/webhook`,
-                    description: `${store.businessName} — ${serviceName} (${quantity})`,
+                    callback_url: freshStore.megapayWebhookUrl || `${APP_URL}/api/megapay/webhook`,
+                    description: `${freshStore.businessName} — ${serviceName} (${quantity})`,
                     reference
                 };
 
@@ -717,7 +977,7 @@ bot.on('message:text', async (ctx) => {
 
                 customerPendingInputs.delete(ctx.from.id);
                 await ctx.reply(
-                    `📲 *Check your phone!*\nM-Pesa prompt has been sent.\nEnter your PIN to complete payment.\n\nYour order will be placed automatically once confirmed.`,
+                    `📲 *Check your phone!*\nM-Pesa prompt has been sent.\nEnter your PIN to complete payment.\n\n⏳ Your order will be placed automatically once confirmed.`,
                     { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('❌ Cancel', 'back_start') }
                 );
             } catch (err) {
@@ -726,6 +986,22 @@ bot.on('message:text', async (ctx) => {
             }
             return;
         }
+    }
+});
+
+// Handle payment confirmation callback
+bot.on('callback_query:data', async (ctx) => {
+    const data = ctx.callbackQuery.data;
+    const customerState = customerPendingInputs.get(ctx.from.id);
+
+    if (data === 'confirm_pay' && customerState?.action === 'awaiting_payment_confirm') {
+        ctx.answerCallbackQuery().catch(()=>{});
+        customerState.action = 'awaiting_payment_phone';
+        await ctx.reply(
+            `💳 *Payment*\n\nEnter your M-Pesa number:\nFormat: 07XXXXXXXX or 01XXXXXXXX`,
+            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+        );
+        return;
     }
 });
 
@@ -770,7 +1046,7 @@ async function handleMegapayWebhook(req, res) {
 
         console.log(`[WEBHOOK] Matched: type=${tx.type}, ref=${tx.reference}`);
 
-        const store = await getDefaultStore();
+        const store = await getDefaultStore(true); // Force refresh
         if (!store) { console.log('[WEBHOOK] No default store'); return; }
 
         if (tx.type === 'order') {
@@ -822,9 +1098,9 @@ async function handleMegapayWebhook(req, res) {
                 status: 'completed'
             });
 
-            let successText = `🎉 *PAYMENT SUCCESSFUL!*\n\nThank you for your order!\n\n💰 *DETAILS*\n• Service: ${escapeMarkdown(order.serviceName)}\n• Quantity: ${order.quantity}\n• Link: ${escapeMarkdown(order.link)}\n• Amount: KES ${amount}\n• Receipt: ${receipt}\n• Order ID: \`${order.smmOrderId}\``;
+            let successText = `🎉 *PAYMENT SUCCESSFUL!*\n\nThank you for your order!\n\n💰 *DETAILS*\n• Service: ${escapeMarkdown(order.serviceName)}\n• Quantity: ${order.quantity.toLocaleString()}\n• Link: ${escapeMarkdown(order.link)}\n• Amount: KES ${amount}\n• Receipt: ${receipt}\n• Order ID: \`${order.smmOrderId}\``;
             if (smmOrderId) {
-                successText += `\n\n⏳ Your order is now *processing*.\nUse /status ${order.smmOrderId} to check updates.`;
+                successText += `\n\n⏳ Your order is now *processing*.\nYou will receive updates automatically.`;
                 if (order.refillEligible) successText += `\n\n🔄 *Refill available* for 30 days. Use /refill ${order.smmOrderId} if drops occur.`;
             } else {
                 successText += `\n\n⚠️ *Auto-placement failed.* Admin will fulfill manually.`;
@@ -843,7 +1119,7 @@ async function handleMegapayWebhook(req, res) {
             if (store.adminAlertChatId) {
                 try {
                     await bot.api.sendMessage(store.adminAlertChatId,
-                        `✅ *New Sale!*\n\n📦 ${escapeMarkdown(order.serviceName)}\n🔗 ${escapeMarkdown(order.link)}\n📊 ${order.quantity} qty\n💵 KES ${amount}\n🧾 ${receipt}\n📱 ${tx.phone}`,
+                        `✅ *New Sale!*\n\n📦 ${escapeMarkdown(order.serviceName)}\n🔗 ${escapeMarkdown(order.link)}\n📊 ${order.quantity.toLocaleString()} qty\n💵 KES ${amount}\n🧾 ${receipt}\n📱 ${tx.phone}`,
                         { parse_mode: "Markdown" }
                     );
                 } catch (e) { console.log('[WEBHOOK] Owner alert failed:', e.message); }
@@ -899,12 +1175,9 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
         const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
-        // "members" catches Telegram subs; rest are standard
         const actions = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
 
-        // ONLY ban: country names/flags + unwanted service types (NOT quality words like "guaranteed", "real", "hq")
         const banned = [
-            // Countries & flags
             'nigeria', 'nigerian', '🇳🇬', 'brazil', 'brazilian', '🇧🇷', 'india', 'indian', '🇮🇳',
             'russia', 'russian', '🇷🇺', 'ukraine', 'ukrainian', '🇺🇦', 'usa', 'american', 'united states', '🇺🇸',
             'turkey', 'turkish', '🇹🇷', 'france', 'french', '🇫🇷', 'china', 'chinese', '🇨🇳',
@@ -912,7 +1185,6 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             'bangladesh', 'indonesia', 'italy', 'italian', 'pakistan', 'pakistani', 'philippines', 'filipino',
             'saudi', 'arabia', 'taiwan', 'thailand', 'uae', 'emirates', 'germany', 'german', 'uk', 'british',
             'spain', 'spanish', 'mexico', 'mexican', 'canada', 'canadian', 'europe', 'european', 'africa', 'asia',
-            // Unwanted service types only
             'shares', 'saves', 'bookmarks', 'retweets', 'impressions', 'poll', 'vote', 'space listeners',
             'trend topic', 'dislikes', 'mass dm', 'bot start', 'boost channel', 'reactions', 'comments likes',
             'comments replay', 'social shares', 'live stream', 'livestream', 'premiere', 'watchtime',
@@ -986,6 +1258,7 @@ app.get('/api/store', validateInitData, async (req, res) => {
         megapayEmail: store.megapayEmail,
         megapayWebhookUrl: store.megapayWebhookUrl,
         enabledServices: store.enabledServices || [],
+        pricingConfig: store.pricingConfig || {},
         expiresAt: store.expiresAt,
         daysLeft: store.expiresAt ? Math.max(0, Math.ceil((store.expiresAt - new Date()) / (1000 * 60 * 60 * 24))) : 0,
         createdAt: store.createdAt
@@ -997,8 +1270,33 @@ app.put('/api/store', validateInitData, async (req, res) => {
     delete updates._id; delete updates.botUsername; delete updates.botId;
     if (updates.megapayApiKey === '') delete updates.megapayApiKey;
     if (updates.megapayEmail === '') delete updates.megapayEmail;
+
+    // CRITICAL FIX: Invalidate cache before update
+    invalidateStoreCache();
+
     const store = await BotInstance.findOneAndUpdate({ isDefault: true }, updates, { returnDocument: 'after', upsert: true });
+    // Update cache with fresh data
+    defaultStore = store;
     res.json(store);
+});
+
+app.get('/api/pricing/config', validateInitData, async (req, res) => {
+    const store = await getDefaultStore();
+    if (!store) return res.status(404).json({ error: 'No store' });
+    res.json(store.pricingConfig || {});
+});
+
+app.put('/api/pricing/config', validateInitData, async (req, res) => {
+    if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
+    const { exchangeRate, markupMultiplier, tiers } = req.body;
+    const store = await BotInstance.findOneAndUpdate(
+        { isDefault: true },
+        { pricingConfig: { exchangeRate, markupMultiplier, tiers } },
+        { returnDocument: 'after' }
+    );
+    invalidateStoreCache();
+    defaultStore = store;
+    res.json({ success: true, pricingConfig: store.pricingConfig });
 });
 
 app.get('/api/store/services', validateInitData, async (req, res) => {
@@ -1020,11 +1318,13 @@ app.get('/api/store/services', validateInitData, async (req, res) => {
 
 app.put('/api/store/services', validateInitData, async (req, res) => {
     const { enabledServices } = req.body;
+    invalidateStoreCache();
     const store = await BotInstance.findOneAndUpdate(
         { isDefault: true },
         { enabledServices: enabledServices || [] },
         { returnDocument: 'after', upsert: true }
     );
+    defaultStore = store;
     res.json({ success: true });
 });
 
@@ -1128,6 +1428,28 @@ cron.schedule('*/15 * * * *', async () => {
                     try {
                         let msg = `📋 *Order Update*\n\nOrder ID: \`${order.smmOrderId}\`\nService: ${escapeMarkdown(order.serviceName)}\nStatus: *${data.status}*`;
                         if (data.remains) msg += `\nRemains: ${data.remains}`;
+
+                        // Send progress/success messages based on status
+                        if (data.status === 'Completed') {
+                            msg = `✅ *ORDER COMPLETED!*\n\n🎉 Your order has been delivered successfully!\n\n` +
+                                  `• Service: ${escapeMarkdown(order.serviceName)}\n` +
+                                  `• Quantity: ${order.quantity.toLocaleString()}\n` +
+                                  `• Order ID: \`${order.smmOrderId}\`\n\n` +
+                                  `Thank you for your purchase! 🙏`;
+                        } else if (data.status === 'In progress') {
+                            msg = `⏳ *ORDER IN PROGRESS*\n\n` +
+                                  `• Service: ${escapeMarkdown(order.serviceName)}\n` +
+                                  `• Order ID: \`${order.smmOrderId}\`\n` +
+                                  `• Status: *Processing*\n\n` +
+                                  `Your order is being worked on. You will be notified when complete.`;
+                        } else if (data.status === 'Partial') {
+                            msg = `⚠️ *ORDER PARTIAL*\n\n` +
+                                  `• Service: ${escapeMarkdown(order.serviceName)}\n` +
+                                  `• Order ID: \`${order.smmOrderId}\`\n` +
+                                  `• Remains: ${data.remains || 'N/A'}\n\n` +
+                                  `A partial refund has been applied to your account.`;
+                        }
+
                         await bot.api.sendMessage(order.customerTelegramId, msg, { parse_mode: "Markdown" });
                     } catch (e) {}
                 }
@@ -1164,7 +1486,7 @@ async function startServer() {
                     botId: bot.botInfo.id,
                     status: 'active',
                     businessName: bot.botInfo.first_name,
-                    welcomeMessage: `Welcome to ${bot.botInfo.first_name}! Boost your social media presence. Choose a category below.`,
+                    welcomeMessage: `Welcome to ${bot.botInfo.first_name}! Boost your social media presence. Choose a platform below.`,
                     adminAlertChatId: String(ADMIN_IDS[0] || ''),
                     expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000)
                 });
