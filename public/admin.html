@@ -53,14 +53,14 @@
   .form-input:focus, .form-select:focus { border-color: #0a84ff; }
   .form-hint { font-size: 12px; color: #0a84ff; margin-top: 4px; font-weight: 500; }
 
-  .file-input-wrapper { position: relative; border: 2px dashed #333; border-radius: 12px; padding: 30px; text-align: center; color: #666; cursor: pointer; transition: all 0.2s; }
+  .file-input-wrapper { position: relative; border: 2px dashed #333; border-radius: 12px; padding: 24px; text-align: center; color: #666; cursor: pointer; transition: all 0.2s; overflow: hidden; }
   .file-input-wrapper:hover { border-color: #0a84ff; color: #0a84ff; }
-  .file-input-wrapper.has-file { border-color: #34c759; color: #34c759; }
-  .file-input-wrapper input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .file-input-wrapper.has-file { border-color: #34c759; border-style: solid; }
+  .file-input-wrapper input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2; }
   .file-preview-box { margin-top: 10px; display: none; }
   .file-preview-box.active { display: block; }
-  .file-preview-box img { max-width: 100%; max-height: 120px; border-radius: 8px; border: 1px solid #333; display: block; }
-  .file-preview-box button { background: #ff3b30; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; margin-top: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .file-preview-box img { max-width: 100%; max-height: 150px; border-radius: 8px; border: 1px solid #333; display: block; margin: 0 auto; }
+  .file-preview-box button { background: #ff3b30; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; margin-top: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
   .badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 700; }
   .badge-green { background: #0d1f0d; color: #34c759; border: 1px solid #1a3a1a; }
@@ -85,14 +85,14 @@
   .back-link { background: none; border: none; color: #0a84ff; font-size: 14px; margin-bottom: 16px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 600; }
 
   .service-row { display: flex; align-items: center; gap: 10px; padding: 12px; background: #1a1a1a; border-radius: 10px; margin-bottom: 8px; }
-  .service-row .info { flex: 1; }
-  .service-row .name { font-weight: 700; font-size: 14px; }
+  .service-row .info { flex: 1; min-width: 0; }
+  .service-row .name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .service-row .meta { font-size: 12px; color: #888; font-weight: 500; }
   .service-row .toggle { width: 44px; height: 24px; background: #333; border-radius: 12px; position: relative; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
   .service-row .toggle.on { background: #34c759; }
   .service-row .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: 0.2s; }
   .service-row .toggle.on::after { left: 22px; }
-  .service-row .price-input { width: 90px; background: #111; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 8px; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+  .service-row .price-input { width: 80px; background: #111; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 8px; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
 
   .order-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin: 0 16px 10px; }
   .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -113,8 +113,14 @@
   .tier-card .tier-inputs input { background: #111; border: 1px solid #333; color: #fff; padding: 10px; border-radius: 8px; font-size: 13px; font-family: 'JetBrains Mono', monospace; width: 100%; }
   .tier-card .tier-inputs label { font-size: 10px; color: #666; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; display: block; }
 
-  .photo-preview { width: 100%; max-height: 150px; object-fit: cover; border-radius: 10px; border: 1px solid #333; margin-top: 8px; }
   .upload-status { font-size: 12px; color: #0a84ff; margin-top: 6px; font-weight: 600; }
+  .upload-status.success { color: #34c759; }
+  .upload-status.error { color: #ff3b30; }
+
+  .bulk-actions { display: flex; gap: 8px; margin-bottom: 16px; }
+  .bulk-actions button { flex: 1; }
+
+  .img-preview-inline { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid #333; margin-bottom: 8px; }
 </style>
 <base target="_blank">
 </head>
@@ -202,14 +208,19 @@
     <div style="padding:16px;">
       <button class="back-link" onclick="showScreen('hub')">← BACK</button>
       <h2 style="margin-bottom:4px;font-weight:800;">Service Catalog</h2>
-      <div style="font-size:13px;color:#888;margin-bottom:16px;font-weight:500;">Toggle ON and set your KES price per 1,000</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px;font-weight:500;">Toggle ON services you want to sell. Prices are auto-calculated.</div>
 
-      <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <button class="btn-primary btn-sm" style="width:auto;" onclick="syncServices()">🔄 SYNC FROM API</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn-primary btn-sm" style="width:auto;" onclick="syncServices()">🔄 SYNC</button>
         <button class="btn-success btn-sm" style="width:auto;" onclick="saveServices()">💾 SAVE</button>
       </div>
 
-      <div id="services-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      <div class="bulk-actions">
+        <button class="btn-secondary btn-sm" onclick="bulkToggle(true)">✅ Enable All</button>
+        <button class="btn-secondary btn-sm" onclick="bulkToggle(false)">❌ Disable All</button>
+      </div>
+
+      <div id="services-list"><div class="loading"><div class="spinner"></div>Loading services...</div></div>
     </div>
   </div>
 
@@ -251,15 +262,14 @@
         <!-- WELCOME PHOTO UPLOAD -->
         <div class="form-group">
           <label class="form-label">WELCOME PHOTO</label>
+          <div id="welcome-photo-preview-box" style="display:none;margin-bottom:10px;">
+            <img id="welcome-photo-preview-img" class="img-preview-inline" src="" alt="Preview">
+          </div>
           <div class="file-input-wrapper" id="welcome-photo-wrapper" onclick="document.getElementById('welcome-photo-file').click()">
             <span class="material-symbols-outlined" style="font-size:32px;">add_photo_alternate</span>
             <div style="font-size:13px;margin-top:8px;font-weight:600;">Tap to upload photo</div>
             <div style="font-size:11px;color:#666;margin-top:4px;">JPG, PNG, WEBP (max 5MB)</div>
             <input type="file" id="welcome-photo-file" accept="image/*" onchange="handlePhotoUpload(this, 'welcome')">
-          </div>
-          <div class="file-preview-box" id="welcome-photo-preview">
-            <img id="welcome-photo-img" src="" alt="Preview">
-            <button onclick="clearPhoto('welcome')">Remove</button>
           </div>
           <input type="hidden" id="edit-welcome-photo">
           <div class="upload-status" id="welcome-photo-status"></div>
@@ -268,15 +278,14 @@
         <!-- BANNER UPLOAD -->
         <div class="form-group">
           <label class="form-label">BANNER IMAGE</label>
+          <div id="banner-preview-box" style="display:none;margin-bottom:10px;">
+            <img id="banner-preview-img" class="img-preview-inline" src="" alt="Preview">
+          </div>
           <div class="file-input-wrapper" id="banner-wrapper" onclick="document.getElementById('banner-file').click()">
             <span class="material-symbols-outlined" style="font-size:32px;">panorama</span>
             <div style="font-size:13px;margin-top:8px;font-weight:600;">Tap to upload banner</div>
             <div style="font-size:11px;color:#666;margin-top:4px;">JPG, PNG, WEBP (max 5MB)</div>
             <input type="file" id="banner-file" accept="image/*" onchange="handlePhotoUpload(this, 'banner')">
-          </div>
-          <div class="file-preview-box" id="banner-preview">
-            <img id="banner-img" src="" alt="Preview">
-            <button onclick="clearPhoto('banner')">Remove</button>
           </div>
           <input type="hidden" id="edit-banner">
           <div class="upload-status" id="banner-status"></div>
@@ -360,7 +369,6 @@ let partner = null;
 let services = [];
 let storeConfig = null;
 let initError = null;
-let appUrl = '';
 
 const API_BASE = '';
 const FETCH_TIMEOUT = 60000;
@@ -453,7 +461,6 @@ async function loadStats() {
 async function loadStore() {
   try {
     storeConfig = await api('GET', '/store');
-    appUrl = storeConfig.appUrl || window.location.origin;
   } catch(e) { console.error('Store load error:', e); }
 }
 
@@ -463,19 +470,43 @@ function loadSettings() {
   document.getElementById('edit-welcome').value = storeConfig.welcomeMessage || '';
   document.getElementById('edit-support').value = storeConfig.supportLink || '';
 
-  // Photo fields
-  document.getElementById('edit-welcome-photo').value = storeConfig.welcomePhoto || '';
-  document.getElementById('edit-banner').value = storeConfig.bannerImageUrl || '';
+  // Photo fields - properly load and display
+  const welcomePhoto = storeConfig.welcomePhoto || '';
+  const bannerImage = storeConfig.bannerImageUrl || '';
 
-  if (storeConfig.welcomePhoto) {
-    document.getElementById('welcome-photo-img').src = storeConfig.welcomePhoto;
-    document.getElementById('welcome-photo-preview').classList.add('active');
-    document.getElementById('welcome-photo-wrapper').classList.add('has-file');
+  document.getElementById('edit-welcome-photo').value = welcomePhoto;
+  document.getElementById('edit-banner').value = bannerImage;
+
+  // Show welcome photo preview if exists
+  if (welcomePhoto) {
+    const previewImg = document.getElementById('welcome-photo-preview-img');
+    const previewBox = document.getElementById('welcome-photo-preview-box');
+    const wrapper = document.getElementById('welcome-photo-wrapper');
+    previewImg.src = welcomePhoto;
+    previewImg.onload = () => {
+      previewBox.style.display = 'block';
+      wrapper.classList.add('has-file');
+    };
+    previewImg.onerror = () => {
+      previewBox.style.display = 'none';
+      wrapper.classList.remove('has-file');
+    };
   }
-  if (storeConfig.bannerImageUrl) {
-    document.getElementById('banner-img').src = storeConfig.bannerImageUrl;
-    document.getElementById('banner-preview').classList.add('active');
-    document.getElementById('banner-wrapper').classList.add('has-file');
+
+  // Show banner preview if exists
+  if (bannerImage) {
+    const previewImg = document.getElementById('banner-preview-img');
+    const previewBox = document.getElementById('banner-preview-box');
+    const wrapper = document.getElementById('banner-wrapper');
+    previewImg.src = bannerImage;
+    previewImg.onload = () => {
+      previewBox.style.display = 'block';
+      wrapper.classList.add('has-file');
+    };
+    previewImg.onerror = () => {
+      previewBox.style.display = 'none';
+      wrapper.classList.remove('has-file');
+    };
   }
 
   const keyInput = document.getElementById('edit-megapay-key');
@@ -484,7 +515,8 @@ function loadSettings() {
   document.getElementById('edit-megapay-email').value = storeConfig.megapayEmail || '';
 
   // Webhook URL
-  document.getElementById('webhook-display').textContent = `${window.location.origin}/api/megapay/webhook`;
+  const webhookUrl = `${window.location.origin}/api/megapay/webhook`;
+  document.getElementById('webhook-display').textContent = webhookUrl;
 
   // Pricing config
   const pricing = storeConfig.pricingConfig || {};
@@ -557,11 +589,21 @@ async function handlePhotoUpload(input, type) {
 
   const statusEl = document.getElementById(type === 'welcome' ? 'welcome-photo-status' : 'banner-status');
   const wrapper = document.getElementById(type === 'welcome' ? 'welcome-photo-wrapper' : 'banner-wrapper');
-  const previewBox = document.getElementById(type === 'welcome' ? 'welcome-photo-preview' : 'banner-preview');
-  const img = document.getElementById(type === 'welcome' ? 'welcome-photo-img' : 'banner-img');
+  const previewBox = document.getElementById(type === 'welcome' ? 'welcome-photo-preview-box' : 'banner-preview-box');
+  const previewImg = document.getElementById(type === 'welcome' ? 'welcome-photo-preview-img' : 'banner-preview-img');
   const hiddenInput = document.getElementById(type === 'welcome' ? 'edit-welcome-photo' : 'edit-banner');
 
+  // Show local preview immediately using FileReader
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    previewImg.src = e.target.result;
+    previewBox.style.display = 'block';
+    wrapper.classList.add('has-file');
+  };
+  reader.readAsDataURL(file);
+
   statusEl.textContent = '⏳ Uploading...';
+  statusEl.className = 'upload-status';
 
   try {
     const formData = new FormData();
@@ -578,11 +620,11 @@ async function handlePhotoUpload(input, type) {
 
     if (data.success && data.url) {
       hiddenInput.value = data.url;
-      img.src = data.url;
-      previewBox.classList.add('active');
+      previewImg.src = data.url;
+      previewBox.style.display = 'block';
       wrapper.classList.add('has-file');
-      statusEl.textContent = '✅ Uploaded!';
-      statusEl.style.color = '#34c759';
+      statusEl.textContent = '✅ Uploaded & saved!';
+      statusEl.className = 'upload-status success';
 
       // Auto-save to store
       await api('PUT', '/store', type === 'welcome' ? { welcomePhoto: data.url } : { bannerImage: data.url });
@@ -590,20 +632,25 @@ async function handlePhotoUpload(input, type) {
     }
   } catch (err) {
     statusEl.textContent = '❌ Upload failed: ' + err.message;
-    statusEl.style.color = '#ff3b30';
+    statusEl.className = 'upload-status error';
   }
 }
 
 function clearPhoto(type) {
   const wrapper = document.getElementById(type === 'welcome' ? 'welcome-photo-wrapper' : 'banner-wrapper');
-  const previewBox = document.getElementById(type === 'welcome' ? 'welcome-photo-preview' : 'banner-preview');
+  const previewBox = document.getElementById(type === 'welcome' ? 'welcome-photo-preview-box' : 'banner-preview-box');
+  const previewImg = document.getElementById(type === 'welcome' ? 'welcome-photo-preview-img' : 'banner-preview-img');
   const hiddenInput = document.getElementById(type === 'welcome' ? 'edit-welcome-photo' : 'edit-banner');
   const statusEl = document.getElementById(type === 'welcome' ? 'welcome-photo-status' : 'banner-status');
+  const fileInput = document.getElementById(type === 'welcome' ? 'welcome-photo-file' : 'banner-file');
 
   hiddenInput.value = '';
-  previewBox.classList.remove('active');
+  previewImg.src = '';
+  previewBox.style.display = 'none';
   wrapper.classList.remove('has-file');
   statusEl.textContent = '';
+  statusEl.className = 'upload-status';
+  fileInput.value = '';
 }
 
 // ==================== SAVE SETTINGS ====================
@@ -675,14 +722,14 @@ function renderServicesList() {
   for (const [cat, items] of Object.entries(grouped)) {
     html += `<div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">${cat}</div>`;
     items.forEach(s => {
+      const enabledCount = services.filter(x => x.isEnabled).length;
       html += `
         <div class="service-row" data-id="${s.serviceId}">
           <div class="info">
             <div class="name">${s.name}</div>
             <div class="meta">${s.type} • Min: ${s.min} • Max: ${s.max} • Refill: ${s.refill ? '✅' : '❌'}</div>
           </div>
-          <input type="number" class="price-input" placeholder="KES/1k" value="${s.customPrice || ''}" onchange="updateServicePrice(${s.serviceId}, this.value)">
-          <div class="toggle ${s.isEnabled ? 'on' : ''}" onclick="toggleService(${s.serviceId}, this)"></div>
+          <div class="toggle ${s.isEnabled ? 'on' : ''}" onclick="toggleService(${s.serviceId}, this)" title="${s.isEnabled ? 'ON' : 'OFF'}"></div>
         </div>
       `;
     });
@@ -690,14 +737,20 @@ function renderServicesList() {
   container.innerHTML = html;
 }
 
-function updateServicePrice(serviceId, value) {
-  const s = services.find(x => x.serviceId === serviceId);
-  if (s) s.customPrice = parseInt(value) || 0;
-}
-
 function toggleService(serviceId, el) {
   const s = services.find(x => x.serviceId === serviceId);
-  if (s) { s.isEnabled = !s.isEnabled; el.classList.toggle('on'); }
+  if (s) { 
+    s.isEnabled = !s.isEnabled; 
+    el.classList.toggle('on'); 
+    // Visual feedback
+    showToast(s.isEnabled ? '✅ Enabled' : '❌ Disabled');
+  }
+}
+
+function bulkToggle(enable) {
+  services.forEach(s => s.isEnabled = enable);
+  renderServicesList();
+  showToast(enable ? '✅ All services enabled' : '❌ All services disabled');
 }
 
 async function saveServices() {

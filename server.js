@@ -95,6 +95,7 @@ const merchantSchema = new mongoose.Schema({
 const serviceSchema = new mongoose.Schema({
     serviceId: { type: Number, required: true, unique: true },
     name: String,
+    displayName: { type: String, default: '' },
     type: String,
     category: String,
     rate: String,
@@ -109,7 +110,7 @@ const pricingTierSchema = new mongoose.Schema({
     label: String,
     minQty: Number,
     maxQty: Number,
-    multiplier: Number // applied on top of base markup for this tier
+    multiplier: Number
 }, { _id: false });
 
 const botInstanceSchema = new mongoose.Schema({
@@ -128,8 +129,8 @@ const botInstanceSchema = new mongoose.Schema({
     megapayEmail: { type: String, default: '' },
     megapayWebhookUrl: { type: String, default: '' },
     pricingConfig: {
-        exchangeRate: { type: Number, default: 130 },     // KES per 1 rate unit (usually USD)
-        markupMultiplier: { type: Number, default: 1.4 }, // 1.4 = 40% profit margin
+        exchangeRate: { type: Number, default: 130 },
+        markupMultiplier: { type: Number, default: 1.4 },
         tiers: { type: [pricingTierSchema], default: () => [
             { label: '🔰 Starter', minQty: 100, maxQty: 500, multiplier: 1.0 },
             { label: '🚀 Growth', minQty: 501, maxQty: 2000, multiplier: 1.0 },
@@ -228,11 +229,6 @@ function escapeMarkdown(text) {
         .replace(/`/g, '\\`');
 }
 
-function daysLeft(endDate) {
-    const diff = new Date(endDate) - new Date();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
-
 async function getOrCreateMerchant(ctx) {
     const from = ctx.from;
     let merchant = await Merchant.findOne({ telegramId: from.id });
@@ -285,6 +281,15 @@ function detectType(service) {
     return 'other';
 }
 
+// Clean service name for customer display
+function cleanServiceName(service) {
+    const platform = detectPlatform(service);
+    const type = detectType(service);
+    const platformName = PLATFORM_META[platform]?.name || (platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : '');
+    const typeName = type === 'other' ? 'Boost' : type.charAt(0).toUpperCase() + type.slice(1);
+    return `${platformName} ${typeName}`.trim();
+}
+
 function getPlatformKeyboard(services) {
     const platforms = new Set();
     services.forEach(s => {
@@ -332,7 +337,7 @@ function calculateKESPrice(rateStr, quantity, pricingConfig) {
     const costPer1kInKES = rate * exchangeRate;
     const pricePer1kInKES = costPer1kInKES * markup;
     const total = (pricePer1kInKES / 1000) * quantity;
-    return Math.max(20, Math.ceil(total / 10) * 10); // Min 20 KES, round to nearest 10
+    return Math.max(20, Math.ceil(total / 10) * 10);
 }
 
 function getTierDisplayPrice(rateStr, tierMax, pricingConfig) {
@@ -444,7 +449,7 @@ const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 bot.catch((err) => { console.error(`Bot Error:`, err.message); });
 
 // ==========================================
-// CUSTOMER MENU (always shows store)
+// CUSTOMER MENU
 // ==========================================
 async function showCustomerMenu(ctx) {
     const store = await getDefaultStore();
@@ -549,7 +554,7 @@ bot.on('callback_query:data', async (ctx) => {
             if (orders.length === 0) text += `_No orders yet._`;
             else {
                 orders.forEach(o => {
-                    text += `• #${o.smmOrderId || 'N/A'} — ${escapeMarkdown(o.serviceName)} — ${o.quantity} qty — KES ${o.price} — ${o.status}\n`;
+                    text += `• #${o.smmOrderId || 'N/A'} — ${escapeMarkdown(o.serviceName)} — ${o.quantity.toLocaleString()} qty — KES ${o.price} — ${o.status}\n`;
                 });
             }
             await ctx.reply(text, { parse_mode: "Markdown", reply_markup: getOwnerMenu() });
@@ -688,16 +693,19 @@ bot.on('callback_query:data', async (ctx) => {
 
         const keyboard = new InlineKeyboard();
         const cfg = store.pricingConfig || {};
+
+        // Show each service with clean name and price
         for (const s of filtered) {
+            const displayName = s.displayName || cleanServiceName(s);
             const tier = cfg.tiers?.[0];
             const startPrice = tier ? getTierDisplayPrice(s.rate, tier.maxQty, cfg) : '??';
-            keyboard.text(`${escapeMarkdown(s.name)} — from KES ${startPrice}`, `svc_${s.serviceId}`).row();
+            keyboard.text(`${displayName} — from KES ${startPrice}`, `svc_${s.serviceId}`).row();
         }
         keyboard.text('🔙 Back', `plat_${platform}`);
 
         const typeEmojis = { followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧' };
         await ctx.reply(
-            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a service package:`,
+            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
             { parse_mode: "Markdown", reply_markup: keyboard }
         );
         return;
@@ -712,6 +720,7 @@ bot.on('callback_query:data', async (ctx) => {
         const cfg = store.pricingConfig || {};
         const tiers = cfg.tiers || [];
         const keyboard = new InlineKeyboard();
+        const displayName = svc.displayName || cleanServiceName(svc);
 
         for (const tier of tiers) {
             const price = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
@@ -719,9 +728,7 @@ bot.on('callback_query:data', async (ctx) => {
         }
         keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
 
-        let text = `🛒 *${escapeMarkdown(svc.name)}*\n\n`;
-        text += `Platform: ${PLATFORM_META[detectPlatform(svc)]?.emoji || ''} ${PLATFORM_META[detectPlatform(svc)]?.name || detectPlatform(svc)}\n`;
-        text += `Type: ${detectType(svc)}\n`;
+        let text = `🛒 *${escapeMarkdown(displayName)}*\n\n`;
         text += `Min: ${svc.min} | Max: ${svc.max}\n`;
         text += `Refill: ${svc.refill ? '✅ Yes (30 days)' : '❌ No'}\n\n`;
         text += `*Select your quantity tier:*`;
@@ -744,9 +751,11 @@ bot.on('callback_query:data', async (ctx) => {
         const tier = tiers.find(t => t.label.replace(/[^a-zA-Z0-9]/g,'') === tierLabel);
         if (!tier) return ctx.reply("❌ Tier not found.");
 
+        const displayName = svc.displayName || cleanServiceName(svc);
+
         customerPendingInputs.set(ctx.from.id, {
             action: 'awaiting_qty_in_tier',
-            data: { serviceId, tier, serviceName: svc.name, platform: detectPlatform(svc), type: detectType(svc), rate: svc.rate, min: svc.min, max: svc.max }
+            data: { serviceId, tier, serviceName: displayName, platform: detectPlatform(svc), type: detectType(svc), rate: svc.rate, min: svc.min, max: svc.max }
         });
 
         const priceForMax = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
@@ -761,7 +770,6 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     if (data.startsWith('cat_')) {
-        // Legacy fallback
         ctx.answerCallbackQuery().catch(()=>{});
         const category = data.replace('cat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
@@ -772,7 +780,8 @@ bot.on('callback_query:data', async (ctx) => {
         services.forEach(s => {
             const cfg = enabled.find(e => e.serviceId === s.serviceId);
             const price = cfg?.customPrice || 0;
-            keyboard.text(`${escapeMarkdown(s.name)} — KES ${price}/1k`, `svc_${s.serviceId}`).row();
+            const displayName = s.displayName || cleanServiceName(s);
+            keyboard.text(`${displayName} — KES ${price}/1k`, `svc_${s.serviceId}`).row();
         });
         keyboard.text('🔙 Back', 'back_start');
 
@@ -859,7 +868,6 @@ bot.on('message:text', async (ctx) => {
 
     // --- CUSTOMER ---
     if (customerState) {
-        // Quantity within tier
         if (customerState.action === 'awaiting_qty_in_tier') {
             const qty = parseInt(ctx.message.text.trim().replace(/,/g, ''));
             const { serviceId, tier, serviceName, rate, min, max } = customerState.data;
@@ -879,7 +887,6 @@ bot.on('message:text', async (ctx) => {
             const cfg = store.pricingConfig || {};
             const tierMultiplier = tier.multiplier || 1.0;
             const basePrice = calculateKESPrice(rate, qty, cfg);
-            // Apply tier discount/multiplier on top
             const adjustedPrice = Math.max(20, Math.ceil(basePrice * tierMultiplier / 10) * 10);
 
             customerState.data.quantity = qty;
@@ -931,7 +938,6 @@ bot.on('message:text', async (ctx) => {
             const { serviceId, serviceName, link, quantity, price } = customerState.data;
             const reference = `ORD${Date.now()}`;
 
-            // CRITICAL FIX: Reload store fresh to ensure Megapay config is current
             const freshStore = await getDefaultStore(true);
             if (!freshStore.megapayApiKey || freshStore.megapayApiKey.length < 10 || !freshStore.megapayEmail || !freshStore.megapayEmail.includes('@')) {
                 await ctx.reply("⚠️ Payment not configured. Please contact support.");
@@ -1046,12 +1052,13 @@ async function handleMegapayWebhook(req, res) {
 
         console.log(`[WEBHOOK] Matched: type=${tx.type}, ref=${tx.reference}`);
 
-        const store = await getDefaultStore(true); // Force refresh
+        const store = await getDefaultStore(true);
         if (!store) { console.log('[WEBHOOK] No default store'); return; }
 
         if (tx.type === 'order') {
             console.log(`[WEBHOOK] Fulfilling order`);
             const svc = await Service.findOne({ serviceId: tx.serviceId });
+            const displayName = svc?.displayName || cleanServiceName(svc) || tx.serviceName || 'Unknown';
 
             let smmOrderId = null;
             try {
@@ -1077,7 +1084,7 @@ async function handleMegapayWebhook(req, res) {
                 customerTelegramId: tx.customerTelegramId,
                 customerChatId: tx.customerChatId,
                 serviceId: tx.serviceId,
-                serviceName: tx.serviceName || svc?.name || 'Unknown',
+                serviceName: displayName,
                 link: tx.link,
                 quantity: tx.quantity,
                 price: amount,
@@ -1089,7 +1096,7 @@ async function handleMegapayWebhook(req, res) {
             await Transaction.create({
                 botId: store._id,
                 serviceId: tx.serviceId,
-                serviceName: tx.serviceName || svc?.name,
+                serviceName: displayName,
                 customerTelegramId: tx.customerTelegramId,
                 customerUsername: '',
                 phone: tx.phone,
@@ -1198,6 +1205,17 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone'
         ];
 
+        const qualityWords = [
+            '100% active real', '100% real humans', 'active real', 'real humans', 'real', 'active',
+            'hq', 'high quality', 'cheapest', 'cheap', 'fast', 'speed', 'stable', 'new', 'online',
+            'instant', 'quick', 'super', 'ultra', 'premium', 'best', 'top', 'guaranteed', 'guranteed',
+            ' refill', 'non drop', 'no drop', 'drop', 'lifetime', 'permanent', 'organic', 'natural',
+            'worldwide', 'global', 'international', 'mixed', 'random', 'targeted', 'naked',
+            'start', '0-1 hour', '0-12 hour', '1-24 hour', 'up to', 'within', 'delivery',
+            'daily', 'instantly', 'auto', 'gradual', 'drip feed', 'slow', 'normal', 'express',
+            'extra', 'bonus', 'free', 'gift', 'trial', 'test', 'sample', 'demo'
+        ];
+
         const uniqueMap = new Map();
         for (const s of services) {
             const id = Number(s.service);
@@ -1214,9 +1232,22 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             const hasBanned = banned.some(b => text.includes(b));
             if (hasBanned) continue;
 
+            // Generate clean display name
+            let displayName = cleanServiceName({ category: s.category, name: s.name });
+
+            // Also clean the raw name for admin view
+            let cleanName = String(s.name || '');
+            qualityWords.forEach(word => {
+                cleanName = cleanName.replace(new RegExp(word, 'gi'), '');
+            });
+            cleanName = cleanName.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+            // Remove leftover country flags and extra pipes
+            cleanName = cleanName.replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, '').replace(/\s+/g, ' ').trim();
+
             uniqueMap.set(id, {
                 serviceId: id,
-                name: String(s.name || ''),
+                name: cleanName || displayName,
+                displayName: displayName,
                 type: String(s.type || ''),
                 category: String(s.category || ''),
                 rate: String(s.rate || ''),
@@ -1270,12 +1301,8 @@ app.put('/api/store', validateInitData, async (req, res) => {
     delete updates._id; delete updates.botUsername; delete updates.botId;
     if (updates.megapayApiKey === '') delete updates.megapayApiKey;
     if (updates.megapayEmail === '') delete updates.megapayEmail;
-
-    // CRITICAL FIX: Invalidate cache before update
     invalidateStoreCache();
-
     const store = await BotInstance.findOneAndUpdate({ isDefault: true }, updates, { returnDocument: 'after', upsert: true });
-    // Update cache with fresh data
     defaultStore = store;
     res.json(store);
 });
@@ -1307,8 +1334,16 @@ app.get('/api/store/services', validateInitData, async (req, res) => {
     const merged = globalServices.map(s => {
         const cfg = enabledMap.get(s.serviceId);
         return {
-            serviceId: s.serviceId, name: s.name, category: s.category, type: s.type,
-            rate: s.rate, min: s.min, max: s.max, refill: s.refill, cancel: s.cancel,
+            serviceId: s.serviceId,
+            name: s.displayName || s.name,
+            rawName: s.name,
+            category: s.category,
+            type: s.type,
+            rate: s.rate,
+            min: s.min,
+            max: s.max,
+            refill: s.refill,
+            cancel: s.cancel,
             isEnabled: cfg?.isEnabled || false,
             customPrice: cfg?.customPrice || 0
         };
@@ -1426,10 +1461,7 @@ cron.schedule('*/15 * * * *', async () => {
 
                 if (oldStatus !== data.status) {
                     try {
-                        let msg = `📋 *Order Update*\n\nOrder ID: \`${order.smmOrderId}\`\nService: ${escapeMarkdown(order.serviceName)}\nStatus: *${data.status}*`;
-                        if (data.remains) msg += `\nRemains: ${data.remains}`;
-
-                        // Send progress/success messages based on status
+                        let msg = '';
                         if (data.status === 'Completed') {
                             msg = `✅ *ORDER COMPLETED!*\n\n🎉 Your order has been delivered successfully!\n\n` +
                                   `• Service: ${escapeMarkdown(order.serviceName)}\n` +
@@ -1448,8 +1480,10 @@ cron.schedule('*/15 * * * *', async () => {
                                   `• Order ID: \`${order.smmOrderId}\`\n` +
                                   `• Remains: ${data.remains || 'N/A'}\n\n` +
                                   `A partial refund has been applied to your account.`;
+                        } else {
+                            msg = `📋 *Order Update*\n\nOrder ID: \`${order.smmOrderId}\`\nService: ${escapeMarkdown(order.serviceName)}\nStatus: *${data.status}*`;
+                            if (data.remains) msg += `\nRemains: ${data.remains}`;
                         }
-
                         await bot.api.sendMessage(order.customerTelegramId, msg, { parse_mode: "Markdown" });
                     } catch (e) {}
                 }
