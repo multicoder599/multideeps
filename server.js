@@ -25,7 +25,7 @@ const ADMIN_IDS = process.env.ADMIN_IDS.split(',').map(id => parseInt(id.trim())
 const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
 const APP_URL = process.env.APP_URL;
 const SMM_API_KEY = process.env.SMMFOLLOWS_API_KEY;
-const SMM_API_URL = process.env.SMMFOLLOWS_API_URL || 'https://smmfollows.com/api';
+const SMM_API_URL = process.env.SMMFOLLOWS_API_URL || 'https://smmfollows.com/api/v2';
 
 // ==========================================
 // MIDDLEWARE
@@ -234,6 +234,7 @@ async function getDefaultStore() {
 
 function getOwnerMenu() {
     return new InlineKeyboard()
+        .text("👁️ Preview Store", "preview_store").row()
         .text("🛒 Service Catalog", "owner_services").row()
         .text("📋 View Orders", "owner_orders").row()
         .text("📊 Stats", "owner_stats").row()
@@ -328,32 +329,17 @@ function normalizeMegapayPayload(data) {
 }
 
 // ==========================================
-// MAIN BOT (Customer-facing + Owner)
+// MAIN BOT
 // ==========================================
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 
 bot.catch((err) => { console.error(`Bot Error:`, err.message); });
 
 // ==========================================
-// REUSABLE START HANDLER
+// CUSTOMER MENU (always shows store)
 // ==========================================
-async function handleStart(ctx) {
+async function showCustomerMenu(ctx) {
     const store = await getDefaultStore();
-    const isOwner = ADMIN_IDS.includes(ctx.from.id);
-
-    if (isOwner) {
-        const welcomeText = `👋 Hello ${escapeMarkdown(ctx.from.first_name || 'Boss')}!\n\n🤖 *SMM Panel Owner*\n\nManage your store, view orders, and configure services below.`;
-        const keyboard = getOwnerMenu();
-        try {
-            if (store && store.welcomePhoto) {
-                await ctx.replyWithPhoto(store.welcomePhoto, { caption: welcomeText, parse_mode: "Markdown", reply_markup: keyboard });
-            } else {
-                await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: keyboard });
-            }
-        } catch (e) { await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: keyboard }); }
-        return;
-    }
-
     if (!store || store.status !== 'active') {
         return ctx.reply("⛔ Store is currently offline. Please check back later.");
     }
@@ -381,6 +367,28 @@ async function handleStart(ctx) {
     } catch (err) { await ctx.reply(welcomeText, { reply_markup: keyboard }); }
 }
 
+// ==========================================
+// /start HANDLER
+// ==========================================
+async function handleStart(ctx) {
+    const isOwner = ADMIN_IDS.includes(ctx.from.id);
+
+    if (isOwner) {
+        const welcomeText = `👋 Hello ${escapeMarkdown(ctx.from.first_name || 'Boss')}!\n\n🤖 *SMM Panel Owner*\n\nManage your store, view orders, and configure services below.`;
+        const keyboard = getOwnerMenu();
+        try {
+            if (defaultStore && defaultStore.welcomePhoto) {
+                await ctx.replyWithPhoto(defaultStore.welcomePhoto, { caption: welcomeText, parse_mode: "Markdown", reply_markup: keyboard });
+            } else {
+                await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: keyboard });
+            }
+        } catch (e) { await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: keyboard }); }
+        return;
+    }
+
+    return showCustomerMenu(ctx);
+}
+
 bot.command("start", handleStart);
 
 bot.command("owner", async (ctx) => {
@@ -402,15 +410,20 @@ bot.command("owner", async (ctx) => {
 });
 
 // ==========================================
-// OWNER CALLBACKS
+// CALLBACKS
 // ==========================================
 bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const store = await getDefaultStore();
 
+    // --- OWNER CALLBACKS ---
     if (ADMIN_IDS.includes(ctx.from.id)) {
+        if (data === 'preview_store') {
+            await ctx.answerCallbackQuery("Opening customer view...");
+            return showCustomerMenu(ctx);
+        }
         if (data === 'owner_services') {
-            await ctx.answerCallbackQuery("Open dashboard to manage services");
+            await ctx.answerCallbackQuery("Open dashboard");
             await ctx.reply(`🛒 *Service Catalog*\n\nOpen your dashboard to enable services and set prices 👇`, {
                 parse_mode: "Markdown",
                 reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL } })
@@ -507,9 +520,7 @@ bot.on('callback_query:data', async (ctx) => {
         }
     }
 
-    // ==========================================
-    // CUSTOMER CALLBACKS
-    // ==========================================
+    // --- CUSTOMER CALLBACKS ---
     if (data.startsWith('cat_')) {
         ctx.answerCallbackQuery().catch(()=>{});
         const category = data.replace('cat_', '');
@@ -543,25 +554,19 @@ bot.on('callback_query:data', async (ctx) => {
 
     if (data === 'back_start') {
         ctx.answerCallbackQuery().catch(()=>{});
-        const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
-        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
-        const categories = [...new Set(services.map(s => s.category))];
-        const keyboard = getCustomerMenu(categories, store.supportLink);
-        try { await ctx.editMessageText(store.welcomeMessage, { reply_markup: keyboard }); }
-        catch (e) { await ctx.reply(store.welcomeMessage, { reply_markup: keyboard }); }
-        return;
+        return showCustomerMenu(ctx);
     }
 });
 
 // ==========================================
-// TEXT INPUT HANDLER
+// TEXT INPUTS
 // ==========================================
 bot.on('message:text', async (ctx) => {
     const state = adminUserState.get(ctx.from.id);
     const customerState = customerPendingInputs.get(ctx.from.id);
     const store = await getDefaultStore();
 
-    // --- OWNER INPUTS ---
+    // --- OWNER ---
     if (state && ADMIN_IDS.includes(ctx.from.id)) {
         const text = ctx.message.text.trim();
 
@@ -623,7 +628,7 @@ bot.on('message:text', async (ctx) => {
         }
     }
 
-    // --- CUSTOMER INPUTS ---
+    // --- CUSTOMER ---
     if (customerState) {
         if (customerState.action === 'awaiting_link') {
             customerState.data.link = ctx.message.text.trim();
@@ -725,7 +730,7 @@ bot.on('message:text', async (ctx) => {
 });
 
 // ==========================================
-// WEBHOOK ENDPOINT
+// WEBHOOK
 // ==========================================
 app.post('/webhook', async (req, res) => {
     await bot.handleUpdate(req.body);
@@ -780,7 +785,7 @@ async function handleMegapayWebhook(req, res) {
                     service: tx.serviceId,
                     link: tx.link,
                     quantity: tx.quantity
-                });
+                }, { timeout: 30000 });
                 if (smmRes.data && smmRes.data.order) {
                     smmOrderId = String(smmRes.data.order);
                     console.log(`[WEBHOOK] SMM order placed: ${smmOrderId}`);
@@ -867,7 +872,7 @@ app.get('/api/megapay/webhook', (req, res) => {
 });
 
 // ==========================================
-// MINI APP API ROUTES
+// MINI APP API
 // ==========================================
 
 app.post('/api/upload', validateInitData, upload.single('file'), async (req, res) => {
@@ -889,11 +894,11 @@ app.get('/api/services', validateInitData, async (req, res) => {
 app.post('/api/services/sync', validateInitData, async (req, res) => {
     if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
     try {
-        const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' });
+        const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' }, { timeout: 30000 });
         let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
-        // DEDUPLICATE: keep first occurrence of each serviceId
+        // DEDUPLICATE by serviceId (smmfollows sometimes sends duplicates)
         const seen = new Set();
         services = services.filter(s => {
             const id = s.service;
@@ -999,9 +1004,9 @@ app.post('/api/orders/:orderId/refill', validateInitData, async (req, res) => {
     if (daysSince > 30) return res.status(400).json({ error: '30-day window expired' });
 
     try {
-        const smmRes = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'refill', order: order.smmOrderId });
+        const smmRes = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'refill', order: order.smmOrderId }, { timeout: 30000 });
         order.refillRequested = true;
-        order.refillStatus = smmRes.data?.status || 'Requested';
+        order.refillStatus = smmRes.data?.refill || smmRes.data?.status || 'Requested';
         await order.save();
         res.json({ success: true, status: order.refillStatus });
     } catch (err) {
@@ -1065,7 +1070,7 @@ cron.schedule('*/15 * * * *', async () => {
     for (const order of orders) {
         if (!order.smmOrderId || order.smmOrderId === 'PENDING') continue;
         try {
-            const res = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'status', order: order.smmOrderId });
+            const res = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'status', order: order.smmOrderId }, { timeout: 30000 });
             const data = res.data;
             if (data && data.status) {
                 const oldStatus = order.status;
