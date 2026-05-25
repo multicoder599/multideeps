@@ -408,7 +408,12 @@ bot.command("owner", async (ctx) => {
         `💰 Total: *KES ${totalRevenue[0]?.total || 0}*\n\nTap below:`;
     await ctx.reply(text, { parse_mode: "Markdown", reply_markup: getOwnerMenu() });
 });
-
+bot.on('callback_query:data', async (ctx) => {
+    // Answer immediately so Telegram doesn't complain if we do slow DB work
+    await ctx.answerCallbackQuery().catch(() => {});
+    
+    const data = ctx.callbackQuery.data;
+    // ... rest of handler
 // ==========================================
 // CALLBACKS
 // ==========================================
@@ -894,33 +899,35 @@ app.get('/api/services', validateInitData, async (req, res) => {
 app.post('/api/services/sync', validateInitData, async (req, res) => {
     if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
     try {
-        const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' }, { timeout: 30000 });
+        const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' }, { timeout: 60000 });
         let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
 
-        // DEDUPLICATE by serviceId (smmfollows sometimes sends duplicates)
-        const seen = new Set();
-        services = services.filter(s => {
-            const id = s.service;
-            if (seen.has(id)) return false;
-            seen.add(id);
-            return true;
-        });
+        // ROBUST DEDUP: force numeric ID, keep first occurrence
+        const uniqueMap = new Map();
+        for (const s of services) {
+            const id = Number(s.service);
+            if (!id || uniqueMap.has(id)) continue;
+            uniqueMap.set(id, {
+                serviceId: id,
+                name: String(s.name || ''),
+                type: String(s.type || ''),
+                category: String(s.category || ''),
+                rate: String(s.rate || ''),
+                min: String(s.min || ''),
+                max: String(s.max || ''),
+                refill: !!s.refill,
+                cancel: !!s.cancel
+            });
+        }
+        const cleanServices = Array.from(uniqueMap.values());
 
         await Service.deleteMany({});
-        await Service.insertMany(services.map(s => ({
-            serviceId: s.service,
-            name: s.name,
-            type: s.type,
-            category: s.category,
-            rate: s.rate,
-            min: s.min,
-            max: s.max,
-            refill: s.refill,
-            cancel: s.cancel
-        })));
+        if (cleanServices.length > 0) {
+            await Service.insertMany(cleanServices, { ordered: false });
+        }
 
-        res.json({ success: true, count: services.length });
+        res.json({ success: true, count: cleanServices.length });
     } catch (err) {
         console.error('Sync error:', err.message);
         res.status(500).json({ error: 'Sync failed', detail: err.message });
