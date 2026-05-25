@@ -89,9 +89,6 @@ const merchantSchema = new mongoose.Schema({
     firstName: String,
     lastName: String,
     phone: String,
-    credits: { type: Number, default: 0 },
-    totalSpent: { type: Number, default: 0 },
-    supportUsername: String,
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -109,11 +106,10 @@ const serviceSchema = new mongoose.Schema({
 });
 
 const botInstanceSchema = new mongoose.Schema({
-    merchantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Merchant', index: true },
+    isDefault: { type: Boolean, default: false },
     botToken: { type: String, required: true },
     botUsername: String,
     botId: Number,
-    isDefault: { type: Boolean, default: false },
     status: { type: String, enum: ['active', 'suspended', 'expired'], default: 'active' },
     businessName: { type: String, default: 'My SMM Store' },
     welcomeMessage: { type: String, default: 'Welcome! Boost your social media presence. Choose a category below.' },
@@ -124,14 +120,11 @@ const botInstanceSchema = new mongoose.Schema({
     megapayApiKey: { type: String, default: '' },
     megapayEmail: { type: String, default: '' },
     megapayWebhookUrl: { type: String, default: '' },
-    markupPercent: { type: Number, default: 50 },
     enabledServices: [{
         serviceId: Number,
         customPrice: { type: Number, default: 0 },
         isEnabled: { type: Boolean, default: false }
     }],
-    subscriptionRemindersSent: [{ type: String, date: Date }],
-    lastBilled: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now },
     expiresAt: Date
 });
@@ -345,7 +338,6 @@ bot.command("start", async (ctx) => {
     const store = await getDefaultStore();
     const isOwner = ADMIN_IDS.includes(ctx.from.id);
 
-    // Owner sees owner menu
     if (isOwner) {
         const welcomeText = `👋 Hello ${escapeMarkdown(ctx.from.first_name || 'Boss')}!\n\n🤖 *SMM Panel Owner*\n\nManage your store, view orders, and configure services below.`;
         const keyboard = getOwnerMenu();
@@ -359,7 +351,6 @@ bot.command("start", async (ctx) => {
         return;
     }
 
-    // Customer sees store
     if (!store || store.status !== 'active') {
         return ctx.reply("⛔ Store is currently offline. Please check back later.");
     }
@@ -387,13 +378,6 @@ bot.command("start", async (ctx) => {
     } catch (err) { await ctx.reply(welcomeText, { reply_markup: keyboard }); }
 });
 
-/* MULTI-TENANT DISABLED — uncomment to reactivate superadmin panel
-bot.command("admin", async (ctx) => {
-    if (!ADMIN_IDS.includes(ctx.from.id)) return ctx.reply("⛔ Unauthorized");
-    // ... superadmin panel code ...
-});
-*/
-
 bot.command("owner", async (ctx) => {
     if (!ADMIN_IDS.includes(ctx.from.id)) return ctx.reply("⛔ Owner only.");
     const store = await getDefaultStore();
@@ -419,7 +403,6 @@ bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const store = await getDefaultStore();
 
-    // Owner-only callbacks
     if (ADMIN_IDS.includes(ctx.from.id)) {
         if (data === 'owner_services') {
             await ctx.answerCallbackQuery("Open dashboard to manage services");
@@ -520,7 +503,7 @@ bot.on('callback_query:data', async (ctx) => {
     }
 
     // ==========================================
-    // CUSTOMER CALLBACKS (Inline Keyboard)
+    // CUSTOMER CALLBACKS
     // ==========================================
     if (data.startsWith('cat_')) {
         ctx.answerCallbackQuery().catch(()=>{});
@@ -566,7 +549,7 @@ bot.on('callback_query:data', async (ctx) => {
 });
 
 // ==========================================
-// TEXT INPUT HANDLER (Owner + Customer)
+// TEXT INPUT HANDLER
 // ==========================================
 bot.on('message:text', async (ctx) => {
     const state = adminUserState.get(ctx.from.id);
@@ -621,7 +604,6 @@ bot.on('message:text', async (ctx) => {
         }
         if (state.action === 'awaiting_broadcast_msg') {
             adminUserState.delete(ctx.from.id);
-            // Get all unique customers
             const orders = await Order.find({ botId: store._id });
             const uniqueCustomers = [...new Set(orders.map(o => o.customerTelegramId))];
             let sent = 0, failed = 0;
@@ -738,7 +720,7 @@ bot.on('message:text', async (ctx) => {
 });
 
 // ==========================================
-// WEBHOOK ENDPOINTS
+// WEBHOOK ENDPOINT
 // ==========================================
 app.post('/webhook', async (req, res) => {
     await bot.handleUpdate(req.body);
@@ -783,10 +765,8 @@ async function handleMegapayWebhook(req, res) {
 
         if (tx.type === 'order') {
             console.log(`[WEBHOOK] Fulfilling order`);
-            const product = store.enabledServices.find(s => s.serviceId === tx.serviceId);
             const svc = await Service.findOne({ serviceId: tx.serviceId });
 
-            // Place order to smmfollows
             let smmOrderId = null;
             try {
                 const smmRes = await axios.post(SMM_API_URL, {
@@ -832,7 +812,6 @@ async function handleMegapayWebhook(req, res) {
                 status: 'completed'
             });
 
-            // Notify customer
             let successText = `🎉 *PAYMENT SUCCESSFUL!*\n\nThank you for your order!\n\n💰 *DETAILS*\n• Service: ${escapeMarkdown(order.serviceName)}\n• Quantity: ${order.quantity}\n• Link: ${escapeMarkdown(order.link)}\n• Amount: KES ${amount}\n• Receipt: ${receipt}\n• Order ID: \`${order.smmOrderId}\``;
             if (smmOrderId) {
                 successText += `\n\n⏳ Your order is now *processing*.\nUse /status ${order.smmOrderId} to check updates.`;
@@ -851,7 +830,6 @@ async function handleMegapayWebhook(req, res) {
                 });
             } catch (sendErr) { console.error(`[WEBHOOK] Failed to notify customer:`, sendErr.message); }
 
-            // Notify owner
             if (store.adminAlertChatId) {
                 try {
                     await bot.api.sendMessage(store.adminAlertChatId,
@@ -884,7 +862,7 @@ app.get('/api/megapay/webhook', (req, res) => {
 });
 
 // ==========================================
-// MINI APP API ROUTES (Single Store)
+// MINI APP API ROUTES
 // ==========================================
 
 app.post('/api/upload', validateInitData, upload.single('file'), async (req, res) => {
@@ -898,7 +876,6 @@ app.get('/api/me', validateInitData, async (req, res) => {
     res.json({ id: merchant._id, telegramId: merchant.telegramId, username: merchant.username, firstName: merchant.firstName, status: 'active' });
 });
 
-// --- Services ---
 app.get('/api/services', validateInitData, async (req, res) => {
     const services = await Service.find().sort({ category: 1, serviceId: 1 });
     res.json(services);
@@ -922,7 +899,6 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
     }
 });
 
-// --- Store (replaces /api/bots) ---
 app.get('/api/store', validateInitData, async (req, res) => {
     const store = await getDefaultStore();
     if (!store) return res.status(404).json({ error: 'Store not configured' });
@@ -939,7 +915,6 @@ app.get('/api/store', validateInitData, async (req, res) => {
         megapayApiKey: store.megapayApiKey ? '••••' + store.megapayApiKey.slice(-4) : '',
         megapayEmail: store.megapayEmail,
         megapayWebhookUrl: store.megapayWebhookUrl,
-        markupPercent: store.markupPercent,
         enabledServices: store.enabledServices || [],
         expiresAt: store.expiresAt,
         daysLeft: store.expiresAt ? Math.max(0, Math.ceil((store.expiresAt - new Date()) / (1000 * 60 * 60 * 24))) : 0,
@@ -956,7 +931,6 @@ app.put('/api/store', validateInitData, async (req, res) => {
     res.json(store);
 });
 
-// --- Store Services ---
 app.get('/api/store/services', validateInitData, async (req, res) => {
     const store = await getDefaultStore();
     if (!store) return res.status(404).json({ error: 'Store not configured' });
@@ -984,7 +958,6 @@ app.put('/api/store/services', validateInitData, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- Orders ---
 app.get('/api/orders', validateInitData, async (req, res) => {
     const store = await getDefaultStore();
     if (!store) return res.status(404).json({ error: 'No store' });
@@ -1013,7 +986,6 @@ app.post('/api/orders/:orderId/refill', validateInitData, async (req, res) => {
     }
 });
 
-// --- Transactions / Stats ---
 app.get('/api/transactions', validateInitData, async (req, res) => {
     const store = await getDefaultStore();
     const txns = await Transaction.find({ botId: store?._id }).sort({ createdAt: -1 }).limit(50);
@@ -1062,8 +1034,6 @@ app.use((err, req, res, next) => {
 // ==========================================
 // CRON JOBS
 // ==========================================
-
-// Every 15 min: Check SMM order statuses
 cron.schedule('*/15 * * * *', async () => {
     console.log('⏰ Checking SMM order statuses...');
     const store = await getDefaultStore();
@@ -1097,49 +1067,61 @@ cron.schedule('*/15 * * * *', async () => {
 });
 
 // ==========================================
-// STARTUP
+// STARTUP — bot.init() BEFORE server starts
 // ==========================================
 const PORT = process.env.PORT || 3020;
 
-app.listen(PORT, async () => {
-    console.log(`🌐 Server listening on port ${PORT}`);
-    console.log(`📱 Mini App: ${APP_URL}`);
-
-    // Ensure default store exists
-    let store = await BotInstance.findOne({ isDefault: true });
-    if (!store) {
-        try {
-            const botInfo = await bot.api.getMe();
-            store = await BotInstance.create({
-                isDefault: true,
-                botToken: process.env.TELEGRAM_BOT_TOKEN,
-                botUsername: botInfo.username,
-                botId: botInfo.id,
-                status: 'active',
-                businessName: botInfo.first_name,
-                welcomeMessage: `Welcome to ${botInfo.first_name}! Boost your social media presence. Choose a category below.`,
-                adminAlertChatId: String(ADMIN_IDS[0] || ''),
-                expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) // 100 years
-            });
-            console.log(`✅ Default store created: @${botInfo.username}`);
-        } catch (e) {
-            console.error('❌ Failed to create default store:', e.message);
-        }
-    } else {
-        defaultStore = store;
-        console.log(`✅ Default store loaded: @${store.botUsername}`);
+async function startServer() {
+    // CRITICAL: Initialize bot before accepting webhooks
+    try {
+        await bot.init();
+        console.log(`🤖 Bot initialized: @${bot.botInfo.username}`);
+    } catch (e) {
+        console.error('❌ Bot init failed:', e.message);
+        process.exit(1);
     }
 
-    // Set webhook
-    if (APP_URL.startsWith('https://')) {
-        try {
-            await bot.api.setWebhook(`${APP_URL}/webhook`);
-            console.log(`✅ Bot webhook set: ${APP_URL}/webhook`);
-        } catch (e) {
-            console.log('⚠️ Webhook setup failed:', e.message);
+    app.listen(PORT, async () => {
+        console.log(`🌐 Server listening on port ${PORT}`);
+        console.log(`📱 Mini App: ${APP_URL}`);
+
+        // Ensure default store exists
+        let store = await BotInstance.findOne({ isDefault: true });
+        if (!store) {
+            try {
+                store = await BotInstance.create({
+                    isDefault: true,
+                    botToken: process.env.TELEGRAM_BOT_TOKEN,
+                    botUsername: bot.botInfo.username,
+                    botId: bot.botInfo.id,
+                    status: 'active',
+                    businessName: bot.botInfo.first_name,
+                    welcomeMessage: `Welcome to ${bot.botInfo.first_name}! Boost your social media presence. Choose a category below.`,
+                    adminAlertChatId: String(ADMIN_IDS[0] || ''),
+                    expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000)
+                });
+                console.log(`✅ Default store created: @${bot.botInfo.username}`);
+            } catch (e) {
+                console.error('❌ Failed to create default store:', e.message);
+            }
+        } else {
+            defaultStore = store;
+            console.log(`✅ Default store loaded: @${store.botUsername}`);
         }
-    } else {
-        console.log('⚠️ HTTP mode — starting polling...');
-        bot.start();
-    }
-});
+
+        // Set webhook
+        if (APP_URL.startsWith('https://')) {
+            try {
+                await bot.api.setWebhook(`${APP_URL}/webhook`);
+                console.log(`✅ Bot webhook set: ${APP_URL}/webhook`);
+            } catch (e) {
+                console.log('⚠️ Webhook setup failed:', e.message);
+            }
+        } else {
+            console.log('⚠️ HTTP mode — starting polling...');
+            bot.start();
+        }
+    });
+}
+
+startServer();
