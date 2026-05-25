@@ -890,13 +890,31 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
     if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
     try {
         const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' });
-        const services = response.data;
+        let services = response.data;
         if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
+
+        // DEDUPLICATE: keep first occurrence of each serviceId
+        const seen = new Set();
+        services = services.filter(s => {
+            const id = s.service;
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+
         await Service.deleteMany({});
         await Service.insertMany(services.map(s => ({
-            serviceId: s.service, name: s.name, type: s.type, category: s.category,
-            rate: s.rate, min: s.min, max: s.max, refill: s.refill, cancel: s.cancel
+            serviceId: s.service,
+            name: s.name,
+            type: s.type,
+            category: s.category,
+            rate: s.rate,
+            min: s.min,
+            max: s.max,
+            refill: s.refill,
+            cancel: s.cancel
         })));
+
         res.json({ success: true, count: services.length });
     } catch (err) {
         console.error('Sync error:', err.message);
