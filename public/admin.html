@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SMM Panel Admin</title>
+<title>SMM Store Admin</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,17 +23,6 @@
   .app-header h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
   .app-header .close-btn { font-size: 22px; color: #fff; background: none; border: none; cursor: pointer; }
 
-  .status-banner { background: #ff3b30; border-radius: 12px; margin: 12px 16px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
-  .status-banner .icon { font-size: 20px; }
-  .status-banner .text { font-size: 13px; font-weight: 700; }
-  .status-banner .checks { margin-left: auto; display: flex; gap: 8px; }
-  .status-banner .check { font-size: 16px; color: #fff; opacity: 0.4; }
-  .status-banner .check.done { opacity: 1; color: #34c759; }
-  .status-actions { display: flex; gap: 8px; margin: 0 16px 16px; }
-  .status-actions button { flex: 1; background: #fff; color: #000; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
-
-  .error-banner { background: #1a0a0a; border: 1px solid #ff3b30; border-radius: 12px; margin: 12px 16px; padding: 14px 16px; color: #ff3b30; font-size: 13px; font-weight: 600; }
-
   .card { background: #111; border-radius: 16px; margin: 12px 16px; padding: 16px; border: 1px solid #222; }
   .card-title { font-size: 18px; font-weight: 800; margin-bottom: 14px; letter-spacing: -0.3px; }
 
@@ -41,19 +30,11 @@
   .welcome-text .dot { color: #34c759; font-size: 24px; line-height: 0; }
   .welcome-sub { font-size: 13px; color: #888; margin: -10px 16px 16px; font-weight: 500; }
 
-  .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 16px 16px; }
-  .qa-btn { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px 12px; text-align: center; color: #0a84ff; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
-
   .snapshot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .snapshot-item { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px 12px; }
   .snapshot-item .value { font-size: 24px; font-weight: 700; color: #34c759; font-family: 'JetBrains Mono', monospace; }
   .snapshot-item .label { font-size: 11px; color: #888; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
   .snapshot-item .sublabel { font-size: 10px; color: #555; margin-top: 2px; font-weight: 500; }
-
-  .status-box { background: #0d1f0d; border: 1px solid #1a3a1a; border-radius: 12px; padding: 14px; margin-top: 12px; display: flex; align-items: center; gap: 10px; }
-  .status-box .check-icon { color: #34c759; font-size: 18px; }
-  .status-box .status-title { font-size: 13px; font-weight: 700; color: #34c759; }
-  .status-box .status-desc { font-size: 12px; color: #888; margin-top: 2px; font-weight: 500; }
 
   .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #000; border-top: 1px solid #222; display: flex; justify-content: space-around; padding: 8px 0 20px; z-index: 100; }
   .nav-item { display: flex; flex-direction: column; align-items: center; color: #666; font-size: 10px; gap: 4px; cursor: pointer; background: none; border: none; flex: 1; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }
@@ -79,15 +60,6 @@
   .file-preview-box img { max-width: 100%; max-height: 120px; border-radius: 8px; border: 1px solid #333; display: block; }
   .file-preview-box button { background: #ff3b30; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; margin-top: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
-  .list-empty { text-align: center; padding: 40px 20px; color: #666; }
-  .list-empty-icon { font-size: 48px; margin-bottom: 12px; }
-  .bot-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin: 0 16px 10px; display: flex; align-items: center; gap: 12px; }
-  .bot-card .avatar { width: 44px; height: 44px; background: #1a1a1a; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #0a84ff; }
-  .bot-card .info { flex: 1; }
-  .bot-card .name { font-weight: 700; font-size: 15px; }
-  .bot-card .meta { font-size: 12px; color: #888; margin-top: 2px; font-weight: 500; }
-  .bot-card .actions { display: flex; gap: 8px; }
-
   .badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 700; }
   .badge-green { background: #0d1f0d; color: #34c759; border: 1px solid #1a3a1a; }
   .badge-blue { background: #0a1a2e; color: #0a84ff; border: 1px solid #1a3a5a; }
@@ -110,21 +82,6 @@
 
   .back-link { background: none; border: none; color: #0a84ff; font-size: 14px; margin-bottom: 16px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 600; }
 
-  .package-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin: 0 16px 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-  .package-card .title { font-weight: 700; font-size: 15px; }
-  .package-card .subtitle { font-size: 12px; color: #888; margin-top: 2px; font-weight: 500; }
-  .package-card .price { color: #0a84ff; font-weight: 800; font-size: 16px; font-family: 'JetBrains Mono', monospace; }
-
-  .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #222; }
-  .tab-btn { background: none; border: none; color: #888; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; font-family: 'Plus Jakarta Sans', sans-serif; }
-  .tab-btn.active { color: #0a84ff; border-bottom-color: #0a84ff; }
-  .tab-content { animation: fadeIn 0.2s ease; }
-
-  .sub-status-box { background: #111; border: 1px solid #222; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
-  .sub-status-box .expired { color: #ff3b30; }
-  .sub-status-box .warning { color: #ff9f0a; }
-  .sub-status-box .active { color: #34c759; }
-
   .service-row { display: flex; align-items: center; gap: 10px; padding: 12px; background: #1a1a1a; border-radius: 10px; margin-bottom: 8px; }
   .service-row .info { flex: 1; }
   .service-row .name { font-weight: 700; font-size: 14px; }
@@ -138,6 +95,13 @@
   .order-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin: 0 16px 10px; }
   .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .order-id { font-weight: 700; font-size: 15px; font-family: 'JetBrains Mono', monospace; }
+
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #222; }
+  .tab-btn { background: none; border: none; color: #888; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .tab-btn.active { color: #0a84ff; border-bottom-color: #0a84ff; }
+  .tab-content { animation: fadeIn 0.2s ease; }
+
+  .webhook-box { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 14px; word-break: break-all; font-size: 13px; color: #0a84ff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 </style>
 </head>
 <body>
@@ -150,35 +114,27 @@
 <div id="app">
   <div class="app-header">
     <button class="close-btn" onclick="try { Telegram.WebApp.close(); } catch(e) { window.close(); }">✕</button>
-    <h1>SMM Panel <span style="font-size:14px;font-weight:500;">⌄</span></h1>
+    <h1>SMM Store <span style="font-size:14px;font-weight:500;">⌄</span></h1>
     <div style="width: 30px;"></div>
   </div>
 
   <!-- HUB -->
   <div id="screen-hub" class="screen">
-    <div id="status-area"></div>
-    <div class="welcome-text">Welcome back, <span id="user-name">Partner</span> <span class="dot">●</span></div>
+    <div class="welcome-text">Welcome back, <span id="user-name">Boss</span> <span class="dot">●</span></div>
     <div class="welcome-sub" id="user-handle">Loading...</div>
 
-    <div class="quick-actions">
-      <div class="qa-btn" onclick="showScreen('bots')">MY BOTS</div>
-      <div class="qa-btn" onclick="showScreen('wallet')">SUBSCRIPTIONS</div>
-      <div class="qa-btn" onclick="showScreen('transact')">ORDERS</div>
-      <div class="qa-btn" onclick="showScreen('more')">SETTINGS</div>
-    </div>
-
     <div class="card">
-      <div class="card-title">Partner Snapshot</div>
+      <div class="card-title">Store Snapshot</div>
       <div class="snapshot-grid">
         <div class="snapshot-item">
-          <div class="value" id="stat-tokens">0</div>
-          <div class="label">ACTIVE BOTS</div>
-          <div class="sublabel">Running now</div>
+          <div class="value" id="stat-orders">0</div>
+          <div class="label">TOTAL ORDERS</div>
+          <div class="sublabel">All time</div>
         </div>
         <div class="snapshot-item">
-          <div class="value" id="stat-bots">0</div>
-          <div class="label">TOTAL BOTS</div>
-          <div class="sublabel">Click to manage</div>
+          <div class="value" id="stat-today">0</div>
+          <div class="label">TODAY'S ORDERS</div>
+          <div class="sublabel">Since midnight</div>
         </div>
         <div class="snapshot-item">
           <div class="value" id="stat-revenue" style="color:#fff;">0</div>
@@ -186,309 +142,125 @@
           <div class="sublabel">Lifetime earnings</div>
         </div>
         <div class="snapshot-item">
-          <div class="value" id="stat-orders" style="font-size:20px;color:#0a84ff;">0</div>
-          <div class="label">TODAY'S ORDERS</div>
-          <div class="sublabel">Latest activity</div>
+          <div class="value" id="stat-txns" style="font-size:20px;color:#0a84ff;">0</div>
+          <div class="label">TRANSACTIONS</div>
+          <div class="sublabel">Completed sales</div>
         </div>
       </div>
-      <div class="status-box">
-        <span class="check-icon">✓</span>
-        <div>
-          <div class="status-title">STATUS: ACTIVE</div>
-          <div class="status-desc">Review order performance and revenue trends across all managed stores.</div>
+    </div>
+
+    <div class="card" style="cursor:pointer;" onclick="showScreen('services')">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="material-symbols-outlined" style="font-size:24px;color:#0a84ff;">shopping_bag</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;">Service Catalog</div>
+          <div style="font-size:12px;color:#888;font-weight:500;">Enable services & set prices</div>
         </div>
+        <span style="color:#888;">›</span>
       </div>
-      <div style="margin-top:16px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <span style="font-size:14px;font-weight:700;">Recent Orders</span>
-          <span style="font-size:12px;color:#0a84ff;cursor:pointer;font-weight:600;" onclick="showScreen('transact')">VIEW ALL</span>
+    </div>
+
+    <div class="card" style="cursor:pointer;" onclick="showScreen('orders')">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="material-symbols-outlined" style="font-size:24px;color:#34c759;">receipt_long</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;">Orders</div>
+          <div style="font-size:12px;color:#888;font-weight:500;">View history & request refills</div>
         </div>
-        <div id="recent-activity"><div style="color:#666;font-size:13px;">No recent orders</div></div>
+        <span style="color:#888;">›</span>
+      </div>
+    </div>
+
+    <div class="card" style="cursor:pointer;" onclick="showScreen('settings')">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="material-symbols-outlined" style="font-size:24px;color:#ff9f0a;">settings</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;">Store Settings</div>
+          <div style="font-size:12px;color:#888;font-weight:500;">Payment, banner, welcome msg</div>
+        </div>
+        <span style="color:#888;">›</span>
       </div>
     </div>
   </div>
 
-  <!-- BOTS -->
-  <div id="screen-bots" class="screen hidden">
-    <div style="padding:16px;display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="font-size:18px;font-weight:800;">Your Bots <span id="bot-count" style="background:#222;padding:2px 8px;border-radius:12px;font-size:12px;font-family:'JetBrains Mono',monospace;">0</span></h2>
-      <button class="btn-primary btn-sm" style="width:auto;" onclick="showAddBot()">+ ADD BOT</button>
-    </div>
-    <div id="bots-list"></div>
-  </div>
-
-  <!-- ADD BOT -->
-  <div id="screen-add-bot" class="screen hidden">
-    <div style="padding:16px;">
-      <button class="back-link" onclick="showScreen('bots')">← BACK TO ALL BOTS</button>
-      <h2 style="margin-bottom:20px;font-weight:800;">Connect a Bot</h2>
-      <div class="form-group">
-        <label class="form-label">BOT DISPLAY NAME</label>
-        <input class="form-input" id="new-bot-name" placeholder="e.g. Nairobi SMM">
-      </div>
-      <div class="form-group">
-        <label class="form-label">BOT API TOKEN</label>
-        <input class="form-input" id="new-bot-token" placeholder="123456:ABC...">
-        <div class="form-hint">Get this from @BotFather</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">ADMIN ALERT CHAT ID</label>
-        <input class="form-input" id="new-bot-alert" placeholder="Your Telegram user ID">
-        <div class="form-hint">Your personal Telegram ID for sale alerts</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">WELCOME PHOTO</label>
-        <div class="file-input-wrapper" id="welcome-wrapper" onclick="document.getElementById('new-bot-welcome-photo').click()">
-          <div id="welcome-file-text">Tap to upload photo from phone</div>
-          <input type="file" id="new-bot-welcome-photo" accept="image/jpeg,image/png,image/webp,image/gif" onchange="handleFileSelect(this, 'welcome')">
-        </div>
-        <div class="file-preview-box" id="welcome-preview">
-          <img id="welcome-preview-img" src="" alt="Preview">
-          <button onclick="clearFile('welcome')">Remove</button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">BANNER IMAGE</label>
-        <div class="file-input-wrapper" id="banner-wrapper" onclick="document.getElementById('new-bot-banner').click()">
-          <div id="banner-file-text">Tap to upload banner from phone</div>
-          <input type="file" id="new-bot-banner" accept="image/jpeg,image/png,image/webp,image/gif" onchange="handleFileSelect(this, 'banner')">
-        </div>
-        <div class="file-preview-box" id="banner-preview">
-          <img id="banner-preview-img" src="" alt="Preview">
-          <button onclick="clearFile('banner')">Remove</button>
-        </div>
-      </div>
-      <button class="btn-primary" onclick="createBot()">CREATE BOT</button>
-      <button class="btn-secondary" style="margin-top:10px;" onclick="showScreen('bots')">CANCEL</button>
-    </div>
-  </div>
-
-  <!-- MANAGE BOT -->
-  <div id="screen-manage-bot" class="screen hidden">
-    <div style="padding:16px;">
-      <button class="back-link" onclick="showScreen('bots')">← BACK TO ALL BOTS</button>
-      <div class="bot-card" style="margin:0 0 16px 0;">
-        <div class="avatar" id="manage-bot-avatar">B</div>
-        <div class="info">
-          <div class="name" id="manage-bot-name">Bot</div>
-          <div class="meta" id="manage-bot-meta">0 orders</div>
-        </div>
-      </div>
-
-      <div class="sub-status-box" id="bot-sub-box">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <div style="font-size:12px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Subscription</div>
-            <div style="font-size:16px;font-weight:700;margin-top:4px;" id="bot-sub-status">Checking...</div>
-          </div>
-          <button class="btn-primary btn-sm" style="width:auto;" onclick="renewBotSubscription()">RENEW</button>
-        </div>
-        <div style="font-size:12px;color:#888;margin-top:6px;font-weight:500;" id="bot-sub-expiry">--</div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-        <button class="btn-primary btn-sm" onclick="showEditBot()">⚙️ EDIT</button>
-        <button class="btn-primary btn-sm" style="background:#34c759;" onclick="showScreen('services')">🛒 SERVICES</button>
-        <button class="btn-danger btn-sm" style="width:auto;" onclick="deleteCurrentBot()">🗑</button>
-      </div>
-
-      <div style="margin-bottom:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <h3 style="font-size:15px;font-weight:800;">Recent Orders</h3>
-          <span style="font-size:12px;color:#0a84ff;cursor:pointer;font-weight:600;" onclick="showScreen('orders')">VIEW ALL</span>
-        </div>
-        <div id="recent-orders-list"><div style="color:#666;font-size:13px;">No orders yet</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SERVICES CATALOG -->
+  <!-- SERVICES -->
   <div id="screen-services" class="screen hidden">
     <div style="padding:16px;">
-      <button class="back-link" onclick="showScreen('manage-bot')">← BACK</button>
+      <button class="back-link" onclick="showScreen('hub')">← BACK</button>
       <h2 style="margin-bottom:4px;font-weight:800;">Service Catalog</h2>
-      <div style="font-size:13px;color:#888;margin-bottom:16px;font-weight:500;">Enable services & set your prices</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px;font-weight:500;">Toggle ON and set your KES price per 1,000</div>
       
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button class="btn-primary btn-sm" style="width:auto;" onclick="syncServices()">🔄 SYNC FROM API</button>
         <button class="btn-success btn-sm" style="width:auto;" onclick="saveServices()">💾 SAVE</button>
       </div>
       
-      <div id="services-list"><div class="loading"><div class="spinner"></div>Loading services...</div></div>
+      <div id="services-list"><div class="loading"><div class="spinner"></div>Loading...</div></div>
     </div>
   </div>
 
-  <!-- ALL ORDERS -->
+  <!-- ORDERS -->
   <div id="screen-orders" class="screen hidden">
     <div style="padding:16px;">
-      <button class="back-link" onclick="showScreen('manage-bot')">← BACK</button>
+      <button class="back-link" onclick="showScreen('hub')">← BACK</button>
       <h2 style="margin-bottom:16px;font-weight:800;">Order History</h2>
       <div id="orders-list"><div class="loading"><div class="spinner"></div>Loading orders...</div></div>
     </div>
   </div>
 
-  <!-- EDIT BOT -->
-  <div id="screen-edit-bot" class="screen hidden">
+  <!-- SETTINGS -->
+  <div id="screen-settings" class="screen hidden">
     <div style="padding:16px;">
-      <button class="back-link" onclick="showScreen('manage-bot')">← BACK</button>
-      <h2 style="margin-bottom:20px;font-weight:800;">Edit Bot Settings</h2>
+      <button class="back-link" onclick="showScreen('hub')">← BACK</button>
+      <h2 style="margin-bottom:20px;font-weight:800;">Store Settings</h2>
 
       <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('general')" id="tab-general">General</button>
         <button class="tab-btn" onclick="switchTab('payment')" id="tab-payment">Payment</button>
-        <button class="tab-btn" onclick="switchTab('automation')" id="tab-automation">Automation</button>
       </div>
 
       <div id="tab-content-general" class="tab-content">
         <div class="form-group">
-          <label class="form-label">BOT NAME</label>
-          <input class="form-input" id="edit-bot-name">
+          <label class="form-label">STORE NAME</label>
+          <input class="form-input" id="edit-store-name">
         </div>
         <div class="form-group">
-          <label class="form-label">ADMIN ALERT CHAT ID</label>
-          <input class="form-input" id="edit-bot-alert">
+          <label class="form-label">WELCOME MESSAGE</label>
+          <input class="form-input" id="edit-welcome">
         </div>
         <div class="form-group">
-          <label class="form-label">WELCOME PHOTO</label>
-          <div class="file-input-wrapper" id="edit-welcome-wrapper" onclick="document.getElementById('edit-bot-welcome-photo-file').click()">
-            <div id="edit-welcome-file-text">Tap to change photo</div>
-            <input type="file" id="edit-bot-welcome-photo-file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="handleEditFile(this, 'welcomePhoto')">
-          </div>
-          <div class="file-preview-box" id="edit-welcome-preview">
-            <img id="edit-welcome-preview-img" src="" alt="Preview">
-            <button onclick="clearEditFile('welcomePhoto')">Remove</button>
-          </div>
-          <input type="hidden" id="edit-bot-welcome-photo">
+          <label class="form-label">SUPPORT LINK</label>
+          <input class="form-input" id="edit-support" placeholder="https://t.me/yourusername">
         </div>
         <div class="form-group">
-          <label class="form-label">BANNER IMAGE</label>
-          <div class="file-input-wrapper" id="edit-banner-wrapper" onclick="document.getElementById('edit-bot-banner-file').click()">
-            <div id="edit-banner-file-text">Tap to change banner</div>
-            <input type="file" id="edit-bot-banner-file" accept="image/jpeg,image/png,image/webp,image/gif" onchange="handleEditFile(this, 'bannerImage')">
-          </div>
-          <div class="file-preview-box" id="edit-banner-preview">
-            <img id="edit-banner-preview-img" src="" alt="Preview">
-            <button onclick="clearEditFile('bannerImage')">Remove</button>
-          </div>
-          <input type="hidden" id="edit-bot-banner">
+          <label class="form-label">WELCOME PHOTO URL</label>
+          <input class="form-input" id="edit-welcome-photo">
+        </div>
+        <div class="form-group">
+          <label class="form-label">BANNER IMAGE URL</label>
+          <input class="form-input" id="edit-banner">
         </div>
       </div>
 
       <div id="tab-content-payment" class="tab-content hidden">
         <div class="form-group">
           <label class="form-label">MEGAPAY API KEY</label>
-          <input class="form-input" id="edit-bot-megapay-key" placeholder="Your Megapay API Key">
+          <input class="form-input" id="edit-megapay-key" placeholder="Your Megapay API Key">
         </div>
         <div class="form-group">
           <label class="form-label">MEGAPAY EMAIL</label>
-          <input class="form-input" id="edit-bot-megapay-email" placeholder="Your Megapay Email">
+          <input class="form-input" id="edit-megapay-email" placeholder="Your Megapay Email">
         </div>
         <div class="form-group">
-          <label class="form-label">YOUR MEGAPAY WEBHOOK URL</label>
-          <div class="webhook-box" onclick="copyWebhookUrl()" style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:14px;word-break:break-all;font-size:13px;color:#0a84ff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <span id="webhook-url">https://yourdomain.com/api/megapay/webhook?id=botname</span>
-            <span class="material-symbols-outlined" style="color:#0a84ff;flex-shrink:0;">content_copy</span>
+          <label class="form-label">WEBHOOK URL (Auto-generated)</label>
+          <div class="webhook-box" onclick="copyWebhook()">
+            <span id="webhook-display">${APP_URL}/api/megapay/webhook</span>
+            <span class="material-symbols-outlined" style="flex-shrink:0;">content_copy</span>
           </div>
-          <div class="form-hint">Tap to copy. Paste this in your Megapay dashboard.</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">CUSTOM WEBHOOK URL (Optional)</label>
-          <input class="form-input" id="edit-bot-webhook" placeholder="Leave empty to use platform webhook">
-          <div class="form-hint">Money goes to YOUR Megapay account</div>
         </div>
       </div>
 
-      <div id="tab-content-automation" class="tab-content hidden">
-        <div class="form-group">
-          <label class="form-label">WELCOME MESSAGE</label>
-          <input class="form-input" id="edit-bot-welcome" placeholder="Sent when user clicks /start...">
-        </div>
-        <div class="form-group">
-          <label class="form-label">SUPPORT LINK URL</label>
-          <input class="form-input" id="edit-bot-support" placeholder="https://t.me/yourusername">
-          <div class="form-hint">Users will see a Support button linking here</div>
-        </div>
-      </div>
-
-      <button class="btn-primary" style="margin-top:20px;" onclick="saveBotSettings()">SAVE CHANGES</button>
-      <button class="btn-secondary" style="margin-top:10px;" onclick="showScreen('manage-bot')">CANCEL</button>
-    </div>
-  </div>
-
-  <!-- WALLET / SUBSCRIPTIONS -->
-  <div id="screen-wallet" class="screen hidden">
-    <div style="padding:16px;">
-      <h2 style="font-size:18px;margin-bottom:4px;font-weight:800;">Portal Wallet <span style="color:#34c759;">●</span></h2>
-      <div style="font-size:13px;color:#888;margin-bottom:16px;font-weight:500;">Bot Subscriptions & Renewals</div>
-      
-      <div style="margin-bottom:20px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Your Bots</div>
-        <div id="bot-subscriptions-list"></div>
-      </div>
-      
-      <div style="margin-top:20px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Subscription Plans</div>
-        <div id="packages-list"><div class="loading"><div class="spinner"></div>Loading packages...</div></div>
-        <div id="refill-section" class="hidden" style="margin-top:16px;">
-          <div class="form-group">
-            <label class="form-label">SELECT BOT TO RENEW</label>
-            <select class="form-select" id="refill-bot-id"><option value="">Select a bot...</option></select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">M-PESA PHONE NUMBER</label>
-            <input class="form-input" id="refill-phone" placeholder="e.g. 254712345678">
-          </div>
-          <button class="btn-primary" onclick="initiateRefill()">⚡ SEND STK PUSH</button>
-          <button class="btn-secondary" style="margin-top:10px;" onclick="cancelRefill()">CANCEL</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TRANSACT / ORDERS -->
-  <div id="screen-transact" class="screen hidden">
-    <div style="padding:16px;">
-      <h2 style="font-size:18px;margin-bottom:16px;font-weight:800;">Revenue Operations</h2>
-      <div class="snapshot-grid" style="margin-bottom:16px;">
-        <div class="snapshot-item">
-          <div class="value" id="tx-records" style="font-size:28px;color:#fff;">0</div>
-          <div class="label">RECORDS LOADED</div>
-        </div>
-        <div class="snapshot-item">
-          <div class="value" id="tx-total" style="font-size:28px;color:#fff;">0</div>
-          <div class="label">TOTAL TRANSACTIONS</div>
-        </div>
-      </div>
-      <div style="overflow-x:auto;">
-        <table class="data-table">
-          <thead><tr><th>SERVICE</th><th>AMOUNT (KSHS)</th><th>STATUS</th><th>M-PESA REF</th></tr></thead>
-          <tbody id="transact-list"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- MORE -->
-  <div id="screen-more" class="screen hidden">
-    <div style="padding:16px;">
-      <h2 style="font-size:18px;margin-bottom:16px;font-weight:800;">Account Settings</h2>
-      <div class="card" style="cursor:pointer;" onclick="window.open('https://t.me/MultiTech_X', '_blank')">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span class="material-symbols-outlined" style="font-size:20px;color:#0a84ff;">support_agent</span>
-          <div>
-            <div style="font-weight:700;">Support</div>
-            <div style="font-size:12px;color:#888;font-weight:500;">Contact @MultiTech_X for help</div>
-          </div>
-          <span style="margin-left:auto;color:#888;">›</span>
-        </div>
-      </div>
-      <div class="card" style="cursor:pointer;margin-top:10px;" onclick="try { Telegram.WebApp.close(); } catch(e) { window.close(); }">
-        <div style="display:flex;align-items:center;gap:12px;color:#ff3b30;">
-          <span class="material-symbols-outlined" style="font-size:20px;">logout</span>
-          <div style="font-weight:700;">Close Dashboard</div>
-          <span style="margin-left:auto;">›</span>
-        </div>
-      </div>
+      <button class="btn-primary" style="margin-top:20px;" onclick="saveStoreSettings()">SAVE CHANGES</button>
     </div>
   </div>
 
@@ -498,21 +270,17 @@
       <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
       HUB
     </button>
-    <button class="nav-item" id="nav-bots" onclick="showScreen('bots')">
-      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
-      BOTS
+    <button class="nav-item" id="nav-services" onclick="showScreen('services')">
+      <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+      SERVICES
     </button>
-    <button class="nav-item" id="nav-wallet" onclick="showScreen('wallet')">
-      <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.11 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-      WALLET
-    </button>
-    <button class="nav-item" id="nav-transact" onclick="showScreen('transact')">
-      <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+    <button class="nav-item" id="nav-orders" onclick="showScreen('orders')">
+      <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
       ORDERS
     </button>
-    <button class="nav-item" id="nav-more" onclick="showScreen('more')">
-      <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
-      MORE
+    <button class="nav-item" id="nav-settings" onclick="showScreen('settings')">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      SETTINGS
     </button>
   </div>
 </div>
@@ -520,13 +288,9 @@
 <script>
 // ==================== STATE ====================
 let currentScreen = 'hub';
-let currentBot = null;
 let partner = null;
-let bots = [];
 let services = [];
-let transactions = [];
-let creditPackages = [];
-let selectedPackage = null;
+let storeConfig = null;
 let initError = null;
 
 const API_BASE = '';
@@ -546,7 +310,6 @@ try {
 
 async function api(method, endpoint, body, isForm = false) {
   const url = `${API_BASE}/api${endpoint}`;
-  console.log(`[API] ${method} ${url}`);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   const opts = { method, headers: { 'X-Telegram-Init-Data': initData || '' }, signal: controller.signal };
@@ -563,7 +326,7 @@ async function api(method, endpoint, body, isForm = false) {
     return res.json();
   } catch (e) {
     clearTimeout(timeoutId);
-    if (e.name === 'AbortError') throw new Error('Request timed out. Server may be slow.');
+    if (e.name === 'AbortError') throw new Error('Request timed out.');
     throw e;
   }
 }
@@ -571,18 +334,15 @@ async function api(method, endpoint, body, isForm = false) {
 async function init() {
   const loader = document.getElementById('init-loader');
   try {
-    if (!initData) document.getElementById('user-handle').textContent = 'Limited mode — open via Telegram';
     partner = await api('GET', '/me');
-    document.getElementById('user-name').textContent = partner.firstName || 'Partner';
-    document.getElementById('user-handle').textContent = `@${partner.username || partner.telegramId} • SMM Panel Partner`;
+    document.getElementById('user-name').textContent = partner.firstName || 'Boss';
+    document.getElementById('user-handle').textContent = `@${partner.username || partner.telegramId} • Store Owner`;
   } catch (e) {
-    initError = e.message || 'Failed to load profile';
-    document.getElementById('user-handle').textContent = 'Error loading profile';
-    showToast('❌ ' + initError);
+    initError = e.message;
+    document.getElementById('user-handle').textContent = 'Offline mode';
   }
 
-  Promise.allSettled([loadStats(), loadBots(), loadTransactions(), loadPackages()])
-    .then((results) => { renderStatusBanner(results.some(r => r.status === 'rejected')); })
+  Promise.allSettled([loadStats(), loadStore()])
     .finally(() => { if (loader) loader.classList.add('hidden'); });
 }
 
@@ -592,277 +352,89 @@ function showScreen(name) {
   const el = document.getElementById(`screen-${name}`);
   if (el) el.classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const navMap = { hub:'nav-hub', bots:'nav-bots', wallet:'nav-wallet', transact:'nav-transact', more:'nav-more' };
+  const navMap = { hub:'nav-hub', services:'nav-services', orders:'nav-orders', settings:'nav-settings' };
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
   currentScreen = name;
   window.scrollTo(0, 0);
+
+  if (name === 'services') showServices();
+  if (name === 'orders') showOrders();
+  if (name === 'settings') loadSettings();
 }
 
-// ==================== FILE UPLOADS ====================
-async function uploadFile(file) {
-  if (!file) return null;
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await api('POST', '/upload', formData, true);
-  return res.url;
-}
-
-function handleFileSelect(input, type) {
-  const file = input.files[0];
-  if (!file) return;
-  const MAX_SIZE = 5 * 1024 * 1024;
-  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (!ALLOWED.includes(file.type)) { showToast('❌ Use JPG, PNG, WEBP or GIF only.'); input.value = ''; return; }
-  if (file.size > MAX_SIZE) { showToast('❌ Image too large. Max 5MB.'); input.value = ''; return; }
-  const wrapper = document.getElementById(type + '-wrapper');
-  const text = document.getElementById(type + '-file-text');
-  wrapper.classList.add('has-file');
-  text.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = document.getElementById(type + '-preview-img');
-    const box = document.getElementById(type + '-preview');
-    if (img && box) { img.src = e.target.result; box.style.display = 'block'; }
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearFile(type) {
-  const inputId = type === 'welcome' ? 'new-bot-welcome-photo' : 'new-bot-banner';
-  const input = document.getElementById(inputId);
-  if (input) input.value = '';
-  const wrapper = document.getElementById(type + '-wrapper');
-  const text = document.getElementById(type + '-file-text');
-  if (wrapper) wrapper.classList.remove('has-file');
-  if (text) text.textContent = type === 'welcome' ? 'Tap to upload photo from phone' : 'Tap to upload banner from phone';
-  const box = document.getElementById(type + '-preview');
-  if (box) box.style.display = 'none';
-}
-
-function handleEditFile(input, field) {
-  const file = input.files[0];
-  if (!file) return;
-  const MAX_SIZE = 5 * 1024 * 1024;
-  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (!ALLOWED.includes(file.type)) { showToast('❌ Use JPG, PNG, WEBP or GIF only.'); input.value = ''; return; }
-  if (file.size > MAX_SIZE) { showToast('❌ Image too large. Max 5MB.'); input.value = ''; return; }
-  const wrapper = input.parentElement;
-  const text = wrapper.querySelector('div');
-  wrapper.classList.add('has-file');
-  text.textContent = file.name;
-  const previewId = field === 'welcomePhoto' ? 'edit-welcome' : 'edit-banner';
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = document.getElementById(previewId + '-preview-img');
-    const box = document.getElementById(previewId + '-preview');
-    if (img && box) { img.src = e.target.result; box.style.display = 'block'; }
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearEditFile(field) {
-  const inputId = field === 'welcomePhoto' ? 'edit-bot-welcome-photo-file' : 'edit-bot-banner-file';
-  const input = document.getElementById(inputId);
-  if (input) input.value = '';
-  const wrapperId = field === 'welcomePhoto' ? 'edit-welcome-wrapper' : 'edit-banner-wrapper';
-  const wrapper = document.getElementById(wrapperId);
-  const text = wrapper.querySelector('div');
-  if (wrapper) wrapper.classList.remove('has-file');
-  if (text) text.textContent = field === 'welcomePhoto' ? 'Tap to change photo' : 'Tap to change banner';
-  const previewId = field === 'welcomePhoto' ? 'edit-welcome' : 'edit-banner';
-  const box = document.getElementById(previewId + '-preview');
-  if (box) box.style.display = 'none';
-}
-
-// ==================== STATUS BANNER ====================
-function renderStatusBanner(apiFailed = false) {
-  const container = document.getElementById('status-area');
-  if (initError || apiFailed) {
-    container.innerHTML = `<div class="error-banner">⚠️ Connection Error: ${initError || 'Failed to load dashboard data'}.<<br><span style="font-size:12px;font-weight:500;">Check server status or try again.</span></div>`;
-    return;
-  }
-  const hasBot = bots.length > 0;
-  if (hasBot) { container.innerHTML = ''; return; }
-  container.innerHTML = `
-    <div class="status-banner">
-      <span class="icon material-symbols-outlined">timer</span>
-      <span class="text">STATUS: INCOMPLETE</span>
-      <div class="checks">
-        <span class="check done material-symbols-outlined">payments</span>
-        <span class="check material-symbols-outlined">settings</span>
-      </div>
-    </div>
-    <div class="status-actions"><button onclick="showScreen('bots')">CREATE BOT</button></div>`;
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById('tab-content-' + tab).classList.remove('hidden');
 }
 
 // ==================== STATS ====================
 async function loadStats() {
   try {
     const stats = await api('GET', '/stats');
-    document.getElementById('stat-tokens').textContent = stats.activeSubscriptions || 0;
-    document.getElementById('stat-bots').textContent = stats.activeBots;
-    document.getElementById('stat-revenue').textContent = stats.revenue;
-    document.getElementById('stat-orders').textContent = stats.todayOrders || 0;
-    document.getElementById('tx-records').textContent = stats.transactions;
-    document.getElementById('tx-total').textContent = stats.transactions;
-    renderBotSubscriptions(stats.bots || []);
-  } catch(e) { console.error('Stats error:', e); throw e; }
+    document.getElementById('stat-orders').textContent = stats.totalOrders || 0;
+    document.getElementById('stat-today').textContent = stats.todayOrders || 0;
+    document.getElementById('stat-revenue').textContent = stats.revenue || 0;
+    document.getElementById('stat-txns').textContent = stats.transactions || 0;
+  } catch(e) { console.error('Stats error:', e); }
 }
 
-// ==================== BOTS ====================
-async function loadBots() {
+// ==================== STORE / SETTINGS ====================
+async function loadStore() {
   try {
-    bots = await api('GET', '/bots');
-    document.getElementById('bot-count').textContent = bots.length;
-    const container = document.getElementById('bots-list');
-    if (bots.length === 0) {
-      container.innerHTML = `
-        <div class="list-empty">
-          <div class="list-empty-icon material-symbols-outlined" style="font-size:48px;">smart_toy</div>
-          <div>No bots yet</div>
-          <div style="font-size:13px;margin-top:8px;font-weight:500;">Connect your first Telegram bot. 1 day FREE!</div>
-          <button class="btn-primary" style="margin-top:16px;width:auto;padding:12px 24px;" onclick="showAddBot()">+ ADD BOT</button>
-        </div>`;
-      return;
-    }
-    container.innerHTML = bots.map(b => {
-      const days = b.daysLeft || 0;
-      const statusColor = days <= 0 ? '#ff3b30' : days <= 3 ? '#ff9f0a' : '#34c759';
-      return `
-      <div class="bot-card">
-        <div class="avatar">${b.botName ? b.botName[0].toUpperCase() : 'B'}</div>
-        <div class="info">
-          <div class="name">${b.botName}</div>
-          <div class="meta">@${b.botUsername || 'bot'} • <span style="color:${statusColor};">${days}d left</span></div>
-        </div>
-        <div class="actions">
-          <button class="btn-primary btn-sm" onclick="manageBot('${b._id}')">MANAGE</button>
-        </div>
-      </div>
-    `}).join('');
-  } catch(e) { console.error('Bots error:', e); throw e; }
+    storeConfig = await api('GET', '/store');
+  } catch(e) { console.error('Store load error:', e); }
 }
 
-function showAddBot() {
-  document.getElementById('new-bot-name').value = '';
-  document.getElementById('new-bot-token').value = '';
-  document.getElementById('new-bot-alert').value = '';
-  clearFile('welcome');
-  clearFile('banner');
-  showScreen('add-bot');
+function loadSettings() {
+  if (!storeConfig) return;
+  document.getElementById('edit-store-name').value = storeConfig.botName || '';
+  document.getElementById('edit-welcome').value = storeConfig.welcomeMessage || '';
+  document.getElementById('edit-support').value = storeConfig.supportLink || '';
+  document.getElementById('edit-welcome-photo').value = storeConfig.welcomePhoto || '';
+  document.getElementById('edit-banner').value = storeConfig.bannerImageUrl || '';
+  
+  const keyInput = document.getElementById('edit-megapay-key');
+  keyInput.value = '';
+  keyInput.placeholder = storeConfig.megapayApiKey ? '••••' + storeConfig.megapayApiKey.slice(-4) + ' (type new)' : 'Your Megapay API Key';
+  document.getElementById('edit-megapay-email').value = storeConfig.megapayEmail || '';
+  
+  switchTab('general');
 }
 
-async function createBot() {
-  const name = document.getElementById('new-bot-name').value.trim();
-  const token = document.getElementById('new-bot-token').value.trim();
-  const alertId = document.getElementById('new-bot-alert').value.trim();
-  if (!token) return showToast('Bot token is required');
-  showToast('⏳ Uploading images...');
-  const welcomeFile = document.getElementById('new-bot-welcome-photo').files[0];
-  const bannerFile = document.getElementById('new-bot-banner').files[0];
-  let welcomePhoto = '', bannerImage = '';
+async function saveStoreSettings() {
+  showToast('⏳ Saving...');
+  const megapayKey = document.getElementById('edit-megapay-key').value.trim();
+  const updates = {
+    businessName: document.getElementById('edit-store-name').value,
+    welcomeMessage: document.getElementById('edit-welcome').value,
+    supportLink: document.getElementById('edit-support').value,
+    welcomePhoto: document.getElementById('edit-welcome-photo').value,
+    bannerImage: document.getElementById('edit-banner').value,
+    megapayEmail: document.getElementById('edit-megapay-email').value
+  };
+  if (megapayKey) updates.megapayApiKey = megapayKey;
+  
   try {
-    if (welcomeFile) welcomePhoto = await uploadFile(welcomeFile);
-    if (bannerFile) bannerImage = await uploadFile(bannerFile);
-  } catch (e) { return showToast('❌ Image upload failed: ' + e.message); }
-  try {
-    await api('POST', '/bots', { botName: name, botToken: token, adminAlertChatId: alertId, welcomePhoto, bannerImage });
-    showToast('✅ Bot created! 1 day FREE trial started.');
-    await loadBots();
-    renderStatusBanner();
-    showScreen('bots');
+    await api('PUT', '/store', updates);
+    storeConfig = await api('GET', '/store');
+    showToast('✅ Settings saved!');
+    showScreen('hub');
   } catch (e) { showToast('❌ ' + e.message); }
 }
 
-async function manageBot(id) {
-  currentBot = bots.find(b => b._id === id);
-  if (!currentBot) return;
-  document.getElementById('manage-bot-name').textContent = currentBot.botName;
-  document.getElementById('manage-bot-avatar').textContent = currentBot.botName ? currentBot.botName[0].toUpperCase() : 'B';
-  document.getElementById('manage-bot-meta').textContent = `Managing store`;
-  
-  const days = currentBot.daysLeft || 0;
-  const subStatusEl = document.getElementById('bot-sub-status');
-  const subExpiryEl = document.getElementById('bot-sub-expiry');
-  const subBox = document.getElementById('bot-sub-box');
-  
-  if (days <= 0) {
-    subStatusEl.textContent = 'EXPIRED'; subStatusEl.className = 'expired';
-    subExpiryEl.textContent = 'Bot is suspended. Renew to activate.';
-    subBox.style.borderColor = '#ff3b30';
-  } else if (days <= 3) {
-    subStatusEl.textContent = `${days} DAYS LEFT`; subStatusEl.className = 'warning';
-    subExpiryEl.textContent = `Expires on ${currentBot.expiresAt ? new Date(currentBot.expiresAt).toLocaleDateString() : 'Unknown'}`;
-    subBox.style.borderColor = '#ff9f0a';
-  } else {
-    subStatusEl.textContent = 'ACTIVE'; subStatusEl.className = 'active';
-    subExpiryEl.textContent = `Expires on ${currentBot.expiresAt ? new Date(currentBot.expiresAt).toLocaleDateString() : 'Unknown'} (${days} days)`;
-    subBox.style.borderColor = '#1a3a1a';
-  }
-  
-  // Load recent orders for this bot
-  try {
-    const orders = await api('GET', `/bots/${id}/orders`);
-    const recentContainer = document.getElementById('recent-orders-list');
-    if (orders.length === 0) {
-      recentContainer.innerHTML = '<div style="color:#666;font-size:13px;">No orders yet</div>';
-    } else {
-      recentContainer.innerHTML = orders.slice(0, 5).map(o => `
-        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a;">
-          <div>
-            <div style="font-weight:700;font-size:13px;">${o.serviceName}</div>
-            <div style="font-size:11px;color:#888;">#${o.smmOrderId || 'N/A'} • ${o.quantity} qty</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:12px;font-weight:700;color:#34c759;">KES ${o.price}</div>
-            <div class="badge" style="background:${o.status==='Completed'?'#0d1f0d':o.status==='In progress'?'#0a1a2e':'#1a1a1a'};color:${o.status==='Completed'?'#34c759':o.status==='In progress'?'#0a84ff':'#888'};">${o.status}</div>
-          </div>
-        </div>
-      `).join('');
-    }
-  } catch(e) { document.getElementById('recent-orders-list').innerHTML = '<div style="color:#666;font-size:13px;">Failed to load orders</div>'; }
-  
-  showScreen('manage-bot');
+function copyWebhook() {
+  const url = document.getElementById('webhook-display').textContent;
+  navigator.clipboard.writeText(url).then(() => showToast('✅ Copied!')).catch(() => showToast('✅ Copied!'));
 }
 
-async function deleteCurrentBot() {
-  if (!currentBot) return;
-  if (!confirm(`Delete bot "${currentBot.botName}"?\n\nThis will stop the bot and remove all data. This cannot be undone.`)) return;
-  try {
-    await api('DELETE', `/bots/${currentBot._id}`);
-    showToast('✅ Bot deleted');
-    bots = bots.filter(b => b._id !== currentBot._id);
-    currentBot = null;
-    await loadBots();
-    renderStatusBanner();
-    showScreen('bots');
-  } catch (e) { showToast('❌ ' + e.message); }
-}
-
-function renewBotSubscription() {
-  if (!currentBot) return;
-  selectedPackage = null;
-  document.getElementById('packages-list').classList.remove('hidden');
-  document.getElementById('refill-section').classList.add('hidden');
-  const select = document.getElementById('refill-bot-id');
-  select.innerHTML = '<option value="">Select a bot...</option>';
-  bots.forEach(b => {
-    const days = b.daysLeft || 0;
-    const status = days <= 0 ? '🔴 EXPIRED' : days <= 3 ? '⚠️' : '🟢';
-    select.innerHTML += `<option value="${b._id}" ${b._id === currentBot._id ? 'selected' : ''}>${status} ${b.botName} (${days}d)</option>`;
-  });
-  showScreen('wallet');
-  showToast('Select a subscription plan below');
-}
-
-// ==================== SERVICES CATALOG ====================
+// ==================== SERVICES ====================
 async function showServices() {
-  if (!currentBot) return;
-  showScreen('services');
   const container = document.getElementById('services-list');
   container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading services...</div>';
   try {
-    const list = await api('GET', `/bots/${currentBot._id}/services`);
+    const list = await api('GET', '/store/services');
     services = list;
     if (list.length === 0) {
       container.innerHTML = '<div class="list-empty"><div class="list-empty-icon material-symbols-outlined" style="font-size:48px;">sync_problem</div><div>No services synced yet</div><div style="font-size:13px;margin-top:8px;font-weight:500;">Tap SYNC FROM API above</div></div>';
@@ -870,7 +442,7 @@ async function showServices() {
     }
     renderServicesList();
   } catch (e) {
-    container.innerHTML = '<div style="color:#ff3b30;text-align:center;padding:20px;">Failed to load services</div>';
+    container.innerHTML = '<div style="color:#ff3b30;text-align:center;padding:20px;">Failed to load</div>';
     showToast('❌ ' + e.message);
   }
 }
@@ -906,25 +478,20 @@ function updateServicePrice(serviceId, value) {
 
 function toggleService(serviceId, el) {
   const s = services.find(x => x.serviceId === serviceId);
-  if (s) {
-    s.isEnabled = !s.isEnabled;
-    el.classList.toggle('on');
-  }
+  if (s) { s.isEnabled = !s.isEnabled; el.classList.toggle('on'); }
 }
 
 async function saveServices() {
-  if (!currentBot) return;
-  showToast('⏳ Saving services...');
+  showToast('⏳ Saving...');
   const payload = services.map(s => ({ serviceId: s.serviceId, customPrice: s.customPrice || 0, isEnabled: !!s.isEnabled }));
   try {
-    await api('PUT', `/bots/${currentBot._id}/services`, { enabledServices: payload });
+    await api('PUT', '/store/services', { enabledServices: payload });
     showToast('✅ Services saved!');
-    showScreen('manage-bot');
   } catch (e) { showToast('❌ ' + e.message); }
 }
 
 async function syncServices() {
-  showToast('⏳ Syncing from smmfollows...');
+  showToast('⏳ Syncing...');
   try {
     const res = await api('POST', '/services/sync', {});
     showToast(`✅ Synced ${res.count} services!`);
@@ -934,12 +501,10 @@ async function syncServices() {
 
 // ==================== ORDERS ====================
 async function showOrders() {
-  if (!currentBot) return;
-  showScreen('orders');
   const container = document.getElementById('orders-list');
   container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading orders...</div>';
   try {
-    const orders = await api('GET', `/bots/${currentBot._id}/orders`);
+    const orders = await api('GET', '/orders');
     if (orders.length === 0) {
       container.innerHTML = '<div class="list-empty"><div class="list-empty-icon material-symbols-outlined" style="font-size:48px;">receipt_long</div><div>No orders yet</div></div>';
       return;
@@ -953,8 +518,8 @@ async function showOrders() {
             <div class="order-id">#${o.smmOrderId || 'N/A'}</div>
             <div class="badge" style="background:${o.status==='Completed'?'#0d1f0d':o.status==='In progress'?'#0a1a2e':'#1a1a1a'};color:${o.status==='Completed'?'#34c759':o.status==='In progress'?'#0a84ff':'#888'};">${o.status}</div>
           </div>
-          <div style="font-size:13px;color:#888;margin-bottom:8px;font-weight:500;">${o.serviceName} • ${o.quantity} qty</div>
-          <div style="font-size:12px;color:#666;margin-bottom:8px;word-break:break-all;">Link: ${o.link}</div>
+          <div style="font-size:13px;color:#888;margin-bottom:8px;">${o.serviceName} • ${o.quantity} qty</div>
+          <div style="font-size:12px;color:#666;margin-bottom:8px;word-break:break-all;">${o.link}</div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-weight:700;color:#fff;font-family:JetBrains Mono;">KES ${o.price}</div>
             ${canRefill ? `<button class="btn-primary btn-sm" style="width:auto;" onclick="requestRefill('${o._id}')">🔄 REFILL</button>` : ''}
@@ -969,193 +534,13 @@ async function showOrders() {
 }
 
 async function requestRefill(orderId) {
-  if (!currentBot) return;
   if (!confirm('Request refill for this order?')) return;
-  showToast('⏳ Requesting refill...');
+  showToast('⏳ Requesting...');
   try {
-    const res = await api('POST', `/bots/${currentBot._id}/orders/${orderId}/refill`, {});
-    showToast('✅ Refill requested: ' + res.status);
+    const res = await api('POST', `/orders/${orderId}/refill`, {});
+    showToast('✅ Refill: ' + res.status);
     await showOrders();
   } catch (e) { showToast('❌ ' + e.message); }
-}
-
-// ==================== EDIT BOT ====================
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-  document.getElementById('tab-content-' + tab).classList.remove('hidden');
-}
-
-function showEditBot() {
-  if (!currentBot) return;
-  document.getElementById('edit-bot-name').value = currentBot.botName || '';
-  document.getElementById('edit-bot-alert').value = currentBot.adminAlertChatId || '';
-  document.getElementById('edit-bot-welcome').value = currentBot.welcomeMessage || '';
-  document.getElementById('edit-bot-welcome-photo').value = currentBot.welcomePhoto || '';
-  document.getElementById('edit-bot-banner').value = currentBot.bannerImageUrl || '';
-  
-  const keyInput = document.getElementById('edit-bot-megapay-key');
-  keyInput.value = '';
-  keyInput.placeholder = currentBot.megapayApiKey ? '••••' + currentBot.megapayApiKey.slice(-4) + ' (type new to change)' : 'Your Megapay API Key';
-  
-  document.getElementById('edit-bot-megapay-email').value = currentBot.megapayEmail || '';
-  document.getElementById('edit-bot-webhook').value = currentBot.megapayWebhookUrl || '';
-  document.getElementById('edit-bot-support').value = currentBot.supportLink || '';
-
-  const welcomeWrapper = document.getElementById('edit-welcome-wrapper');
-  const welcomeText = document.getElementById('edit-welcome-file-text');
-  welcomeWrapper.classList.remove('has-file');
-  welcomeText.textContent = currentBot.welcomePhoto ? 'Photo set (tap to change)' : 'Tap to upload photo';
-  document.getElementById('edit-welcome-preview').style.display = 'none';
-
-  const bannerWrapper = document.getElementById('edit-banner-wrapper');
-  const bannerText = document.getElementById('edit-banner-file-text');
-  bannerWrapper.classList.remove('has-file');
-  bannerText.textContent = currentBot.bannerImageUrl ? 'Banner set (tap to change)' : 'Tap to upload banner';
-  document.getElementById('edit-banner-preview').style.display = 'none';
-
-  const webhookUrl = `${APP_URL}/api/megapay/webhook?id=${currentBot.botUsername || 'bot'}`;
-  document.getElementById('webhook-url').textContent = webhookUrl;
-
-  switchTab('general');
-  showScreen('edit-bot');
-}
-
-function copyWebhookUrl() {
-  const url = document.getElementById('webhook-url').textContent;
-  navigator.clipboard.writeText(url).then(() => showToast('✅ Webhook URL copied!')).catch(() => {
-    const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('✅ Webhook URL copied!');
-  });
-}
-
-async function saveBotSettings() {
-  if (!currentBot) return;
-  showToast('⏳ Saving...');
-  const welcomeFile = document.getElementById('edit-bot-welcome-photo-file').files[0];
-  const bannerFile = document.getElementById('edit-bot-banner-file').files[0];
-  let welcomePhoto = document.getElementById('edit-bot-welcome-photo').value;
-  let bannerImage = document.getElementById('edit-bot-banner').value;
-  try {
-    if (welcomeFile) welcomePhoto = await uploadFile(welcomeFile);
-    if (bannerFile) bannerImage = await uploadFile(bannerFile);
-  } catch (e) { return showToast('❌ Image upload failed: ' + e.message); }
-
-  const megapayKey = document.getElementById('edit-bot-megapay-key').value.trim();
-  const updates = {
-    businessName: document.getElementById('edit-bot-name').value,
-    welcomeMessage: document.getElementById('edit-bot-welcome').value,
-    adminAlertChatId: document.getElementById('edit-bot-alert').value,
-    welcomePhoto, bannerImage,
-    supportLink: document.getElementById('edit-bot-support').value,
-    megapayEmail: document.getElementById('edit-bot-megapay-email').value,
-    megapayWebhookUrl: document.getElementById('edit-bot-webhook').value
-  };
-  if (megapayKey) updates.megapayApiKey = megapayKey;
-
-  try {
-    await api('PUT', `/bots/${currentBot._id}`, updates);
-    showToast('✅ Bot updated!');
-    await loadBots();
-    currentBot = bots.find(b => b._id === currentBot._id);
-    showScreen('manage-bot');
-  } catch (e) { showToast('❌ ' + e.message); }
-}
-
-// ==================== WALLET & PACKAGES ====================
-function renderBotSubscriptions(botList) {
-  const container = document.getElementById('bot-subscriptions-list');
-  if (!botList || botList.length === 0) { container.innerHTML = '<div style="color:#666;font-size:13px;">No bots yet</div>'; return; }
-  container.innerHTML = botList.map(b => {
-    const days = b.daysLeft || 0;
-    const statusColor = days <= 0 ? '#ff3b30' : days <= 3 ? '#ff9f0a' : '#34c759';
-    const statusText = days <= 0 ? 'EXPIRED' : days <= 3 ? `${days}d left` : 'Active';
-    return `
-      <div style="background:#111;border:1px solid #222;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-        <div><div style="font-weight:700;font-size:14px;">${b.botName}</div><div style="font-size:12px;color:#888;font-weight:500;">@${b.botUsername}</div></div>
-        <div style="text-align:right;"><div style="color:${statusColor};font-weight:700;font-size:13px;">${statusText}</div><div style="font-size:11px;color:#888;">${b.expiresAt ? new Date(b.expiresAt).toLocaleDateString() : '--'}</div></div>
-      </div>
-    `;
-  }).join('');
-}
-
-async function loadPackages() {
-  try {
-    creditPackages = await api('GET', '/packages');
-    const container = document.getElementById('packages-list');
-    container.innerHTML = creditPackages.map(pkg => `
-      <div class="package-card" onclick="selectPackage('${pkg._id}')">
-        <div><div class="title">${pkg.name}</div><div class="subtitle">${pkg.durationDays} Days • Per bot</div></div>
-        <div class="price">KES ${pkg.price}</div>
-      </div>
-    `).join('');
-  } catch (e) { console.error('Packages error:', e); throw e; }
-}
-
-function selectPackage(id) {
-  selectedPackage = creditPackages.find(p => p._id === id);
-  if (!selectedPackage) return;
-  document.getElementById('packages-list').classList.add('hidden');
-  document.getElementById('refill-section').classList.remove('hidden');
-  const select = document.getElementById('refill-bot-id');
-  select.innerHTML = '<option value="">Select a bot...</option>';
-  bots.forEach(b => {
-    const days = b.daysLeft || 0;
-    const status = days <= 0 ? '🔴 EXPIRED' : days <= 3 ? '⚠️' : '🟢';
-    select.innerHTML += `<option value="${b._id}">${status} ${b.botName} (${days}d)</option>`;
-  });
-  showToast(`Selected ${selectedPackage.name} — Select bot & enter phone`);
-}
-
-function cancelRefill() {
-  selectedPackage = null;
-  document.getElementById('packages-list').classList.remove('hidden');
-  document.getElementById('refill-section').classList.add('hidden');
-  document.getElementById('refill-phone').value = '';
-  document.getElementById('refill-bot-id').value = '';
-}
-
-async function initiateRefill() {
-  if (!selectedPackage) return;
-  const phone = document.getElementById('refill-phone').value.trim();
-  const botId = document.getElementById('refill-bot-id').value;
-  if (!botId) return showToast('Please select a bot to renew');
-  if (!phone) return showToast('Phone number is required');
-  try {
-    const res = await api('POST', '/credits/initiate', { packageId: selectedPackage._id, phone, botId });
-    showToast('✅ STK Push sent! Check your phone and enter PIN.');
-    cancelRefill();
-    setTimeout(() => { loadStats(); loadBots(); }, 5000);
-  } catch (e) { showToast('❌ ' + e.message); }
-}
-
-// ==================== TRANSACTIONS ====================
-async function loadTransactions() {
-  try {
-    transactions = await api('GET', '/transactions');
-    const container = document.getElementById('transact-list');
-    const activityContainer = document.getElementById('recent-activity');
-    if (transactions.length === 0) {
-      container.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#666;padding:30px;">No transactions yet</td></tr>`;
-      activityContainer.innerHTML = `<div style="color:#666;font-size:13px;">No recent activity</div>`;
-      return;
-    }
-    container.innerHTML = transactions.map(t => `
-      <tr>
-        <td><div style="font-weight:700;">${t.serviceName || 'Sale'}</div><div style="font-size:11px;color:#888;font-weight:500;">@${t.customerUsername || t.customerTelegramId}</div></td>
-        <td style="font-weight:700;font-family:'JetBrains Mono',monospace;">${t.amount}</td>
-        <td><span class="badge ${t.status === 'completed' ? 'badge-green' : ''}" style="background:${t.status==='completed'?'#0d1f0d':'#1a1a1a'};color:${t.status==='completed'?'#34c759':'#888'}">${t.status.toUpperCase()}</span></td>
-        <td style="font-size:11px;color:#888;font-weight:500;">${t.mpesaReceipt || 'N/A'}</td>
-      </tr>
-    `).join('');
-
-    const latest = transactions[0];
-    activityContainer.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1a1a1a;">
-        <div><div style="font-weight:700;font-size:13px;">${latest.serviceName || 'Sale'}</div><div style="font-size:11px;color:#888;font-weight:500;">@${latest.customerUsername || latest.customerTelegramId}</div></div>
-        <div style="text-align:right;"><div style="color:#34c759;font-weight:700;font-family:'JetBrains Mono',monospace;">+KES ${latest.amount}</div><div style="font-size:11px;color:#888;font-weight:500;">${new Date(latest.createdAt).toLocaleTimeString()}</div></div>
-      </div>`;
-  } catch(e) { console.error('Transactions error:', e); throw e; }
 }
 
 // ==================== UTILS ====================
