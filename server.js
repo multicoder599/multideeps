@@ -408,12 +408,7 @@ bot.command("owner", async (ctx) => {
         `💰 Total: *KES ${totalRevenue[0]?.total || 0}*\n\nTap below:`;
     await ctx.reply(text, { parse_mode: "Markdown", reply_markup: getOwnerMenu() });
 });
-bot.on('callback_query:data', async (ctx) => {
-    // Answer immediately so Telegram doesn't complain if we do slow DB work
-    await ctx.answerCallbackQuery().catch(() => {});
-    
-    const data = ctx.callbackQuery.data;
-    // ... rest of handler
+
 // ==========================================
 // CALLBACKS
 // ==========================================
