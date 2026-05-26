@@ -229,6 +229,12 @@ function escapeMarkdown(text) {
         .replace(/`/g, '\\`');
 }
 
+// Telegram inline button text limit is 64 chars; stay well under for safety
+function btnText(text, max = 58) {
+    if (!text) return '...';
+    return text.length > max ? text.slice(0, max - 3) + '...' : text;
+}
+
 async function getOrCreateMerchant(ctx) {
     const from = ctx.from;
     let merchant = await Merchant.findOne({ telegramId: from.id });
@@ -476,7 +482,10 @@ async function showCustomerMenu(ctx) {
         } else {
             await ctx.reply(welcomeText, { reply_markup: keyboard });
         }
-    } catch (err) { await ctx.reply(welcomeText, { reply_markup: keyboard }); }
+    } catch (err) {
+        console.error('[showCustomerMenu] Photo send failed:', err.message);
+        await ctx.reply(welcomeText, { reply_markup: keyboard });
+    }
 }
 
 // ==========================================
@@ -493,8 +502,9 @@ async function handleStart(ctx) {
 Manage your store, view orders, and configure services below.`;
         const keyboard = getOwnerMenu();
         try {
-            if (defaultStore && defaultStore.welcomePhoto) {
-                await ctx.replyWithPhoto(defaultStore.welcomePhoto, { caption: welcomeText, parse_mode: "Markdown", reply_markup: keyboard });
+            const store = await getDefaultStore();
+            if (store && store.welcomePhoto) {
+                await ctx.replyWithPhoto(store.welcomePhoto, { caption: welcomeText, parse_mode: "Markdown", reply_markup: keyboard });
             } else {
                 await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: keyboard });
             }
@@ -536,6 +546,52 @@ bot.on('callback_query:data', async (ctx) => {
 
     const store = await getDefaultStore();
     const customerState = customerPendingInputs.get(userId);
+
+    // ---- STATUS CHECK (refreshable) ----
+    if (data.startsWith('status_')) {
+        const smmOrderId = data.replace('status_', '');
+        const order = await Order.findOne({ smmOrderId, customerTelegramId: userId });
+        if (!order) {
+            await ctx.reply("❌ Order not found. It may have been placed from another account.");
+            return;
+        }
+
+        let msg = `📋 *Order Status*\n\n` +
+            `🛒 ${escapeMarkdown(order.serviceName)}\n` +
+            `📊 Qty: ${order.quantity.toLocaleString()}\n` +
+            `🔗 ${escapeMarkdown(order.link)}\n\n`;
+
+        try {
+            const res = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'status', order: smmOrderId }, { timeout: 30000 });
+            const d = res.data;
+            if (d && d.status) {
+                order.status = d.status;
+                order.startCount = d.start_count || order.startCount;
+                order.remains = d.remains || order.remains;
+                order.charge = d.charge || order.charge;
+                order.currency = d.currency || order.currency;
+                order.updatedAt = new Date();
+                await order.save();
+                msg += `📌 Current: *${d.status}*\n`;
+                if (d.start_count) msg += `▶️ Start Count: ${d.start_count}\n`;
+                if (d.remains) msg += `⏳ Remains: ${d.remains}\n`;
+                if (d.charge) msg += `💵 Charge: ${d.charge} ${d.currency || ''}\n`;
+            } else {
+                msg += `📌 Status: *${order.status}*\n`;
+            }
+        } catch (e) {
+            msg += `📌 Status: *${order.status}*\n_⚠️ Live refresh failed — showing last known status._\n`;
+        }
+
+        msg += `\n_Last updated: ${new Date().toLocaleTimeString()}_`;
+
+        const keyboard = new InlineKeyboard()
+            .text('🔄 Refresh Status', `status_${smmOrderId}`).row()
+            .text('🔙 Main Menu', 'back_start');
+
+        await ctx.reply(msg, { parse_mode: "Markdown", reply_markup: keyboard });
+        return;
+    }
 
     if (data === 'confirm_pay') {
         if (!customerState || customerState.action !== 'awaiting_payment_confirm') {
@@ -703,7 +759,8 @@ bot.on('callback_query:data', async (ctx) => {
             const displayName = s.displayName || cleanServiceName(s);
             const tier = cfg.tiers?.[0];
             const startPrice = tier ? getTierDisplayPrice(s.rate, tier.maxQty, cfg) : '??';
-            keyboard.text(`${displayName} — from KES ${startPrice}`, `svc_${s.serviceId}`).row();
+            const rawLabel = `${displayName} | KES ${startPrice}`;
+            keyboard.text(btnText(rawLabel), `svc_${s.serviceId}`).row();
         }
         keyboard.text('🔙 Back', `plat_${platform}`);
 
@@ -727,14 +784,18 @@ bot.on('callback_query:data', async (ctx) => {
 
         for (const tier of tiers) {
             const price = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
-            keyboard.text(`${tier.label}\n${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()} @ KES ${price}`, `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
+            const rawLabel = `${tier.label} • KES ${price}`;
+            keyboard.text(btnText(rawLabel), `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
         }
         keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
 
         let text = `🛒 *${escapeMarkdown(displayName)}*\n\n`;
         text += `Min: ${svc.min} | Max: ${svc.max}\n`;
         text += `Refill: ${svc.refill ? '✅ Yes (30 days)' : '❌ No'}\n\n`;
-        text += `*Select your quantity tier:*`;
+        text += `*Select your quantity tier:*\n`;
+        tiers.forEach(t => {
+            text += `• ${t.label}: ${t.minQty.toLocaleString()}-${t.maxQty.toLocaleString()} qty\n`;
+        });
 
         await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
         return;
@@ -782,7 +843,7 @@ bot.on('callback_query:data', async (ctx) => {
             const cfg = enabled.find(e => e.serviceId === s.serviceId);
             const price = cfg?.customPrice || 0;
             const displayName = s.displayName || cleanServiceName(s);
-            keyboard.text(`${displayName} — KES ${price}/1k`, `svc_${s.serviceId}`).row();
+            keyboard.text(btnText(`${displayName} — KES ${price}/1k`), `svc_${s.serviceId}`).row();
         });
         keyboard.text('🔙 Back', 'back_start');
 
@@ -917,6 +978,7 @@ bot.on('message:text', async (ctx) => {
                 `🔗 Link: ${escapeMarkdown(link)}\n` +
                 `📊 Quantity: ${quantity.toLocaleString()}\n` +
                 `💰 Total: *KES ${price}*\n\n` +
+                `⏳ *Delivery Notice:* Orders typically start within minutes. Larger quantities may take up to 24 hours depending on the platform.\n\n` +
                 `Tap *PROCEED TO PAY* to continue 👇`,
                 {
                     parse_mode: "Markdown",
@@ -1090,7 +1152,8 @@ async function handleMegapayWebhook(req, res) {
 
             let successText = `🎉 *PAYMENT SUCCESSFUL!*\n\nThank you for your order!\n\n💰 *DETAILS*\n• Service: ${escapeMarkdown(order.serviceName)}\n• Quantity: ${order.quantity.toLocaleString()}\n• Link: ${escapeMarkdown(order.link)}\n• Amount: KES ${amount}\n• Receipt: ${receipt}\n• Order ID: \`${order.smmOrderId}\``;
             if (smmOrderId) {
-                successText += `\n\n⏳ Your order is now *processing*.\nYou will receive updates automatically.`;
+                successText += `\n\n⏳ *Delivery:* Your order is now processing. Delivery times vary by platform and quantity (usually minutes, occasionally up to 24h for large orders).`;
+                successText += `\n\nYou can check your order status anytime below 👇`;
                 if (order.refillEligible) successText += `\n\n🔄 *Refill available* for 30 days. Use /refill ${order.smmOrderId} if drops occur.`;
             } else {
                 successText += `\n\n⚠️ *Auto-placement failed.* Admin will fulfill manually.`;
