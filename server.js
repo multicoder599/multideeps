@@ -130,13 +130,13 @@ const botInstanceSchema = new mongoose.Schema({
     megapayWebhookUrl: { type: String, default: '' },
     pricingConfig: {
         exchangeRate: { type: Number, default: 130 },
-        markupMultiplier: { type: Number, default: 1.4 },
+        markupMultiplier: { type: Number, default: 1.5 },
         tiers: { type: [pricingTierSchema], default: () => [
-            { label: '🔰 Starter', minQty: 100, maxQty: 500, multiplier: 1.0 },
+            { label: '🔰 Starter', minQty: 50, maxQty: 500, multiplier: 1.15 },
             { label: '🚀 Growth', minQty: 501, maxQty: 2000, multiplier: 1.0 },
-            { label: '⚡ Bulk', minQty: 2001, maxQty: 5000, multiplier: 0.95 },
-            { label: '💎 Mega', minQty: 5001, maxQty: 10000, multiplier: 0.9 },
-            { label: '👑 Supreme', minQty: 10001, maxQty: 50000, multiplier: 0.85 }
+            { label: '⚡ Bulk', minQty: 2001, maxQty: 5000, multiplier: 0.92 },
+            { label: '💎 Mega', minQty: 5001, maxQty: 10000, multiplier: 0.85 },
+            { label: '👑 Supreme', minQty: 10001, maxQty: 50000, multiplier: 0.78 }
         ]}
     },
     enabledServices: [{
@@ -281,7 +281,6 @@ function detectType(service) {
     return 'other';
 }
 
-// Clean service name for customer display
 function cleanServiceName(service) {
     const platform = detectPlatform(service);
     const type = detectType(service);
@@ -333,7 +332,7 @@ function calculateKESPrice(rateStr, quantity, pricingConfig) {
     const rate = parseFloat(rateStr) || 0;
     if (rate <= 0 || quantity <= 0) return 0;
     const exchangeRate = pricingConfig?.exchangeRate || 130;
-    const markup = pricingConfig?.markupMultiplier || 1.4;
+    const markup = pricingConfig?.markupMultiplier || 1.5;
     const costPer1kInKES = rate * exchangeRate;
     const pricePer1kInKES = costPer1kInKES * markup;
     const total = (pricePer1kInKES / 1000) * quantity;
@@ -527,19 +526,17 @@ bot.command("owner", async (ctx) => {
 });
 
 // ==========================================
-// CALLBACKS — SINGLE HANDLER (FIXED)
+// CALLBACKS — SINGLE HANDLER
 // ==========================================
 bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const userId = ctx.from.id;
 
-    // ALWAYS answer callback query immediately to prevent loading spinner
     try { await ctx.answerCallbackQuery(); } catch (e) {}
 
     const store = await getDefaultStore();
     const customerState = customerPendingInputs.get(userId);
 
-    // --- CONFIRM PAY (merged here to ensure it always fires) ---
     if (data === 'confirm_pay') {
         if (!customerState || customerState.action !== 'awaiting_payment_confirm') {
             await ctx.reply("⚠️ Session expired. Please start over with /start");
@@ -553,7 +550,6 @@ bot.on('callback_query:data', async (ctx) => {
         return;
     }
 
-    // --- OWNER CALLBACKS ---
     if (ADMIN_IDS.includes(userId)) {
         if (data === 'preview_store') {
             return showCustomerMenu(ctx);
@@ -625,7 +621,7 @@ bot.on('callback_query:data', async (ctx) => {
         if (data === 'owner_pricing') {
             const cfg = store.pricingConfig || {};
             const tiers = cfg.tiers || [];
-            let text = `💰 *Auto-Pricing Config*\n\nExchange Rate: *${cfg.exchangeRate || 130}* KES per unit\nMarkup: *${((cfg.markupMultiplier || 1.4) * 100 - 100).toFixed(0)}%* profit margin\n\n*Tiers:*\n`;
+            let text = `💰 *Auto-Pricing Config*\n\nExchange Rate: *${cfg.exchangeRate || 130}* KES per unit\nMarkup: *${((cfg.markupMultiplier || 1.5) * 100 - 100).toFixed(0)}%* profit margin\n\n*Tiers:*\n`;
             tiers.forEach(t => {
                 text += `• ${t.label}: ${t.minQty.toLocaleString()} - ${t.maxQty.toLocaleString()} (multiplier: ${t.multiplier}x)\n`;
             });
@@ -666,7 +662,6 @@ bot.on('callback_query:data', async (ctx) => {
         }
     }
 
-    // --- CUSTOMER CALLBACKS ---
     if (data === 'back_start') {
         return showCustomerMenu(ctx);
     }
@@ -804,7 +799,6 @@ bot.on('message:text', async (ctx) => {
     const customerState = customerPendingInputs.get(ctx.from.id);
     const store = await getDefaultStore();
 
-    // --- OWNER ---
     if (state && ADMIN_IDS.includes(ctx.from.id)) {
         const text = ctx.message.text.trim();
 
@@ -872,7 +866,6 @@ bot.on('message:text', async (ctx) => {
         }
     }
 
-    // --- CUSTOMER ---
     if (customerState) {
         if (customerState.action === 'awaiting_qty_in_tier') {
             const qty = parseInt(ctx.message.text.trim().replace(/,/g, ''));
@@ -1164,6 +1157,9 @@ app.get('/api/services', validateInitData, async (req, res) => {
     res.json(services);
 });
 
+// ==========================================
+// SMART SYNC — DEDUPLICATE + SCORE BY SPEED/PROFIT
+// ==========================================
 app.post('/api/services/sync', validateInitData, async (req, res) => {
     if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
     try {
@@ -1174,6 +1170,7 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
         const actions = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
 
+        // Hard ban list — anything matching these is rejected entirely
         const banned = [
             'nigeria', 'nigerian', '🇳🇬', 'brazil', 'brazilian', '🇧🇷', 'india', 'indian', '🇮🇳',
             'russia', 'russian', '🇷🇺', 'ukraine', 'ukrainian', '🇺🇦', 'usa', 'american', 'united states', '🇺🇸',
@@ -1192,24 +1189,330 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             'by gender', 'by niche', 'by retention', 'from referrer', 'search engine', 'shopping', 'forum',
             'news', 'social media', 'by keywords', 'by topic', 'suggest by ai', 'created by ai', 'powerd by ai',
             'ai generated', 'ai smart', 'auto future', 'discussion', 'search ranking', 'online accounts',
-            'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone'
+            'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone',
+            'spotify', 'soundcloud', 'twitch', 'linkedin', 'pinterest', 'tumblr', 'vk', 'ok.ru',
+            'discord', 'clubhouse', 'kwai', 'likee', 'bigolive', 'trovo', 'dlive', 'vimeo',
+            'dailymotion', 'rumble', 'odysee', 'bitchute', 'brighteon', 'bilibili', 'weibo',
+            'line', 'kakao', 'naver', 'zalo', 'viber', 'wechat', 'qq',
+            'onlyfans', 'fansly', 'patreon', 'cameo', 'gofundme', 'kickstarter',
+            'trustpilot', 'sitejabber', 'yelp', 'google maps', 'google review',
+            'app install', 'app rating', 'app review', 'ios', 'android', 'apk',
+            'website', 'web traffic', 'direct traffic', 'referral', 'bounce',
+            'alexa', 'domain', 'backlink', 'guest post', 'press release',
+            'coinmarketcap', 'coingecko', 'crypto', 'token', 'nft drop',
+            'minecraft', 'roblox', 'steam', 'epic games', 'origin', 'uplay',
+            'playstation', 'xbox', 'nintendo', 'game', 'gaming',
+            'quora', 'medium', 'substack', 'ghost', 'wordpress', 'blogger',
+            'behance', 'dribbble', 'deviantart', 'artstation', 'pixiv',
+            'fiverr', 'upwork', 'freelancer', 'peopleperhour',
+            'shopee', 'lazada', 'amazon review', 'ebay feedback', 'etsy',
+            'alibaba', 'aliexpress', 'daraz', 'jumia', 'konga', 'olx',
+            'netflix', 'hulu', 'disney', 'hbo', 'prime video', 'apple tv',
+            'only fans', 'fansly', 'justforfans', 'manyvids', 'avn stars'
         ];
 
-        const qualityWords = [
+        // Words to strip from display names
+        const noiseWords = [
             '100% active real', '100% real humans', 'active real', 'real humans', 'real', 'active',
             'hq', 'high quality', 'cheapest', 'cheap', 'fast', 'speed', 'stable', 'new', 'online',
             'instant', 'quick', 'super', 'ultra', 'premium', 'best', 'top', 'guaranteed', 'guranteed',
-            ' refill', 'non drop', 'no drop', 'drop', 'lifetime', 'permanent', 'organic', 'natural',
+            'non drop', 'no drop', 'drop', 'lifetime', 'permanent', 'organic', 'natural',
             'worldwide', 'global', 'international', 'mixed', 'random', 'targeted', 'naked',
             'start', '0-1 hour', '0-12 hour', '1-24 hour', 'up to', 'within', 'delivery',
             'daily', 'instantly', 'auto', 'gradual', 'drip feed', 'slow', 'normal', 'express',
-            'extra', 'bonus', 'free', 'gift', 'trial', 'test', 'sample', 'demo'
+            'extra', 'bonus', 'free', 'gift', 'trial', 'test', 'sample', 'demo',
+            ' refill', 'refill', 'refillable', '30 days', '90 days', '180 days',
+            'working', 'functioning', 'operational', 'updated', 'latest', 'version',
+            'server', 'panel', 'api', 'smm', 'reseller', 'provider', 'supplier',
+            'max', 'min', 'minimum', 'maximum', 'limit', 'range', 'qty', 'quantity',
+            'per day', 'per hour', 'per minute', 'per second', 'hourly', 'daily',
+            'source', 'method', 'type', 'category', 'class', 'tier', 'level',
+            'bot', 'script', 'software', 'tool', 'program', 'app', 'botting',
+            'male', 'female', 'gender', 'age', 'demographic', 'niche', 'interest',
+            'arab', 'african', 'asian', 'european', 'american', 'latin',
+            'english', 'spanish', 'french', 'german', 'russian', 'chinese',
+            'arabic', 'hindi', 'portuguese', 'japanese', 'korean', 'turkish',
+            'usa', 'uk', 'ca', 'au', 'eu', 'asia', 'africa', 'latam',
+            'old', 'aged', 'fresh', 'newly created', 'pva', 'phone verified',
+            'non pva', 'email verified', 'verified', 'unverified', 'blank',
+            'profile pic', 'bio', 'posts', 'story', 'highlight', 'reel',
+            'private', 'public', 'open', 'closed', 'secret', 'hidden',
+            'group', 'channel', 'page', 'account', 'profile', 'user',
+            'custom', 'personalized', 'tailored', 'bespoke', 'unique',
+            'high', 'low', 'medium', 'standard', 'basic', 'advanced', 'pro',
+            'vip', 'elite', 'exclusive', 'premium', 'gold', 'silver', 'bronze',
+            'starter', 'beginner', 'intermediate', 'expert', 'master', 'legend',
+            'package', 'bundle', 'combo', 'deal', 'offer', 'promo', 'sale',
+            'discount', 'special', 'limited', 'flash', 'mega', 'super', 'hyper',
+            'ultra', 'extreme', 'ultimate', 'supreme', 'max', 'plus', 'extra',
+            'lite', 'mini', 'micro', 'nano', 'small', 'medium', 'large', 'xl',
+            '1k', '2k', '5k', '10k', '50k', '100k', '1m', 'per 1k', 'per 1000',
+            '₹', '$', '€', '£', '¥', 'usd', 'eur', 'gbp', 'inr', 'idr', 'rub',
+            'just', 'only', 'merely', 'simply', 'purely', 'exactly', 'precisely',
+            'about', 'around', 'approximately', 'roughly', 'nearly', 'almost',
+            'more than', 'less than', 'over', 'under', 'below', 'above',
+            'from', 'to', 'between', 'and', 'or', 'with', 'without', 'plus',
+            'including', 'excluding', 'except', 'besides', 'apart from',
+            'guaranteed', 'warranty', 'assured', 'certified', 'licensed',
+            'official', 'unofficial', 'original', 'copy', 'clone', 'duplicate',
+            'faux', 'fake', 'imitation', 'replica', 'simulated', 'synthetic',
+            'authentic', 'genuine', 'legit', 'real', 'true', 'actual', 'original',
+            'replacement', 'substitute', 'alternative', 'option', 'choice',
+            'variant', 'variation', 'edition', 'version', 'model', 'series',
+            'generation', 'batch', 'lot', 'set', 'collection', 'assortment',
+            'mix', 'mixed', 'combo', 'combined', 'blended', 'fusion', 'hybrid',
+            'random', ' assorted', 'diverse', 'varied', 'different', 'various',
+            'multiple', 'many', 'numerous', 'several', 'few', 'some', 'all',
+            'each', 'every', 'any', 'some', 'no', 'not', 'none', 'never',
+            'always', 'often', 'sometimes', 'usually', 'rarely', 'seldom',
+            'frequently', 'occasionally', 'regularly', 'daily', 'weekly',
+            'monthly', 'yearly', 'hourly', 'minute', 'second', 'moment',
+            'instant', 'immediate', 'now', 'today', 'tonight', 'tomorrow',
+            'yesterday', 'soon', 'later', 'eventually', 'finally', 'ultimately',
+            'first', 'last', 'next', 'previous', 'former', 'latter', 'current',
+            'past', 'future', 'present', 'recent', 'latest', 'newest', 'oldest',
+            'modern', 'ancient', 'old', 'young', 'new', 'fresh', 'stale',
+            'good', 'bad', 'better', 'worse', 'best', 'worst', 'great',
+            'excellent', 'amazing', 'awesome', 'fantastic', 'wonderful',
+            'terrible', 'awful', 'horrible', 'disgusting', 'pathetic',
+            'nice', 'fine', 'okay', 'decent', 'acceptable', 'satisfactory',
+            'perfect', 'ideal', 'optimal', 'suitable', 'appropriate', 'fit',
+            'ready', 'prepared', 'set', 'done', 'finished', 'complete',
+            'incomplete', 'partial', 'half', 'full', 'empty', 'whole',
+            'total', 'complete', 'entire', 'absolute', 'utter', 'sheer',
+            'pure', 'clean', 'clear', 'transparent', 'opaque', 'solid',
+            'liquid', 'gas', 'plasma', 'energy', 'matter', 'substance',
+            'material', 'stuff', 'thing', 'object', 'item', 'product',
+            'goods', 'merchandise', 'commodity', 'ware', 'article',
+            'piece', 'unit', 'part', 'component', 'element', 'factor',
+            'aspect', 'feature', 'characteristic', 'quality', 'property',
+            'attribute', 'trait', 'detail', 'point', 'particular', 'specific',
+            'general', 'universal', 'common', 'usual', 'normal', 'standard',
+            'typical', 'regular', 'ordinary', 'average', 'median', 'mean',
+            'mode', 'range', 'scope', 'scale', 'degree', 'extent', 'level',
+            'grade', 'rank', 'class', 'category', 'group', 'set', 'type',
+            'kind', 'sort', 'variety', 'form', 'shape', 'size', 'color',
+            'colour', 'tone', 'hue', 'shade', 'tint', 'pigment', 'dye',
+            'paint', 'coat', 'cover', 'layer', 'film', 'skin', 'shell',
+            'crust', 'surface', 'face', 'side', 'edge', 'border', 'boundary',
+            'limit', 'bound', 'confine', 'end', 'tip', 'top', 'bottom',
+            'base', 'foot', 'root', 'core', 'heart', 'center', 'middle',
+            'midst', 'interior', 'inside', 'within', 'inner', 'internal',
+            'exterior', 'outside', 'outer', 'external', 'surface', 'outward',
+            'up', 'down', 'left', 'right', 'forward', 'backward', 'ahead',
+            'behind', 'beyond', 'above', 'below', 'under', 'over', 'across',
+            'through', 'into', 'onto', 'upon', 'off', 'out', 'in', 'on',
+            'at', 'by', 'near', 'beside', 'next', 'close', 'far', 'distant',
+            'remote', 'local', 'native', 'foreign', 'domestic', 'home',
+            'away', 'abroad', 'overseas', 'internal', 'external', 'national',
+            'international', 'global', 'worldwide', 'universal', 'cosmic',
+            'planetary', 'solar', 'lunar', 'stellar', 'galactic', 'atomic',
+            'nuclear', 'molecular', 'cellular', 'organic', 'biological',
+            'natural', 'artificial', 'synthetic', 'man-made', 'human-made',
+            'machine', 'mechanical', 'automatic', 'manual', 'handmade',
+            'homemade', 'custom', 'bespoke', 'tailor-made', 'made-to-order',
+            'prefab', 'prefabricated', 'mass-produced', 'factory-made',
+            'industrial', 'commercial', 'retail', 'wholesale', 'bulk',
+            'individual', 'personal', 'private', 'public', 'shared',
+            'collective', 'joint', 'mutual', 'common', 'communal',
+            'social', 'societal', 'cultural', 'political', 'economic',
+            'financial', 'monetary', 'fiscal', 'budgetary', 'commercial',
+            'business', 'corporate', 'enterprise', 'industrial', 'manufacturing',
+            'production', 'construction', 'engineering', 'technical',
+            'technological', 'digital', 'electronic', 'electric', 'electrical',
+            'mechanical', 'chemical', 'physical', 'biological', 'medical',
+            'health', 'wellness', 'fitness', 'nutrition', 'dietary',
+            'culinary', 'gastronomic', 'food', 'beverage', 'drink',
+            'alcoholic', 'non-alcoholic', 'soft', 'hard', 'strong',
+            'weak', 'diluted', 'concentrated', 'pure', 'mixed', 'blended',
+            'shaken', 'stirred', 'frozen', 'chilled', 'hot', 'warm',
+            'cold', 'cool', 'icy', 'burning', 'boiling', 'steaming',
+            'smoking', 'flaming', 'sparking', 'glowing', 'shining',
+            'bright', 'dim', 'dark', 'light', 'heavy', 'weighty',
+            'lightweight', 'featherweight', 'heavyweight', 'middleweight',
+            'welterweight', 'light-middle', 'cruiserweight', 'bantam',
+            'flyweight', 'strawweight', 'atomweight', 'minimum',
+            'mini', 'micro', 'nano', 'pico', 'femto', 'atto',
+            'zepto', 'yocto', 'deci', 'centi', 'milli', 'kilo',
+            'mega', 'giga', 'tera', 'peta', 'exa', 'zetta', 'yotta',
+            'byte', 'bit', 'pixel', 'dot', 'point', 'inch', 'foot',
+            'yard', 'mile', 'meter', 'centimeter', 'millimeter',
+            'kilometer', 'gram', 'kilogram', 'ton', 'pound', 'ounce',
+            'liter', 'milliliter', 'gallon', 'quart', 'pint', 'cup',
+            'tablespoon', 'teaspoon', 'drop', 'dash', 'pinch', 'smidgen',
+            'handful', 'mouthful', 'spoonful', 'bucketful', 'tubful',
+            'truckload', ' shipload', 'boatload', 'cartload', 'wagonload',
+            'army', 'navy', 'air force', 'marine', 'coast guard',
+            'police', 'sheriff', 'constable', 'marshal', 'ranger',
+            'trooper', 'deputy', 'officer', 'agent', 'detective',
+            'inspector', 'sergeant', 'lieutenant', 'captain', 'major',
+            'colonel', 'general', 'admiral', 'commander', 'chief',
+            'president', 'vice', 'prime', 'minister', 'secretary',
+            'treasurer', 'auditor', 'clerk', 'secretary', 'assistant',
+            'associate', 'partner', 'member', 'affiliate', 'ally',
+            'friend', 'enemy', 'rival', 'competitor', 'opponent',
+            'adversary', 'antagonist', 'protagonist', 'hero', 'villain',
+            'victim', 'survivor', 'witness', 'bystander', 'spectator',
+            'audience', 'crowd', 'mob', 'gang', 'crew', 'team',
+            'squad', 'unit', 'platoon', 'company', 'battalion',
+            'regiment', 'brigade', 'division', 'corps', 'army',
+            'force', 'legion', 'horde', 'swarm', 'flock', 'herd',
+            'pack', 'pride', 'school', 'shoal', 'colony', 'nest',
+            'hive', 'den', 'lair', 'burrow', 'hole', 'cave',
+            'tunnel', 'passage', 'channel', 'canal', 'duct', 'pipe',
+            'tube', 'cylinder', 'barrel', 'drum', 'tank', 'vat',
+            'tub', 'basin', 'bowl', 'dish', 'plate', 'tray',
+            'platter', 'saucer', 'cup', 'mug', 'glass', 'tumbler',
+            'goblet', 'chalice', 'flute', 'stein', 'tankard', 'flagon',
+            'jar', 'jug', 'pitcher', 'ewer', 'carafe', 'decanter',
+            'bottle', 'flask', 'vial', 'phial', 'ampoule', 'capsule',
+            'tablet', 'pill', 'lozenge', 'pastille', 'troche', 'drop',
+            'globule', 'bead', 'pearl', 'grain', 'kernel', 'seed',
+            'nut', 'pit', 'stone', 'rock', 'pebble', 'cobble',
+            'boulder', 'slab', 'block', 'brick', 'tile', 'slate',
+            'shingle', 'panel', 'board', 'plank', 'beam', 'timber',
+            'log', 'stick', 'rod', 'pole', 'staff', 'stave', 'club',
+            'bat', 'racket', 'paddle', 'oar', 'scull', 'sweep',
+            'spade', 'shovel', 'hoe', 'rake', 'fork', 'pitchfork',
+            'sickle', 'scythe', 'machete', 'cleaver', 'hatchet',
+            'axe', 'ax', 'pick', 'pickaxe', 'mattock', 'crowbar',
+            'pry', 'wrench', 'spanner', 'plier', 'tongs', 'forceps',
+            'clamp', 'vise', 'grip', 'holder', 'stand', 'rack',
+            'shelf', 'ledge', 'mantel', 'sill', 'threshold', 'doorstep',
+            'stoop', 'porch', 'veranda', 'patio', 'deck', 'balcony',
+            'terrace', 'gallery', 'colonnade', 'arcade', 'cloister',
+            'courtyard', 'quad', 'plaza', 'square', 'piazza', 'forum',
+            'market', 'bazaar', 'souk', 'mall', 'plaza', 'center',
+            'complex', 'compound', 'enclosure', 'park', 'garden',
+            'yard', 'lawn', 'meadow', 'pasture', 'field', 'paddock',
+            'corral', 'pen', 'fold', 'coop', 'hutch', 'cage', 'crate',
+            'box', 'case', 'casket', 'coffin', 'sarcophagus', 'urn',
+            'vase', 'pot', 'kettle', 'cauldron', 'caldron', 'crucible',
+            'retort', 'flask', 'beaker', 'test tube', 'pipette',
+            'burette', 'funnel', 'filter', 'sieve', 'screen', 'mesh',
+            'net', 'web', 'trap', 'snare', 'noose', 'lasso', 'rope',
+            'cord', 'string', 'thread', 'yarn', 'fiber', 'filament',
+            'strand', 'ribbon', 'tape', 'band', 'strip', 'belt',
+            'sash', 'girdle', 'cummerbund', 'waistband', 'headband',
+            'wristband', 'armband', 'anklet', 'bracelet', 'bangle',
+            'chain', 'necklace', 'pendant', 'locket', 'medallion',
+            'charm', 'bead', 'gem', 'jewel', 'stone', 'crystal',
+            'diamond', 'ruby', 'sapphire', 'emerald', 'pearl', 'opal',
+            'jade', 'amber', 'coral', 'ivory', 'ebony', 'mahogany',
+            'teak', 'oak', 'pine', 'maple', 'birch', 'ash', 'elm',
+            'beech', 'cedar', 'redwood', 'sequoia', 'willow', 'poplar',
+            'aspen', 'cottonwood', 'sycamore', 'chestnut', 'walnut',
+            'hickory', 'pecan', 'almond', 'cashew', 'pistachio',
+            'macadamia', 'brazil nut', 'hazelnut', 'filbert', 'acorn',
+            'pine nut', 'coconut', 'date', 'fig', 'raisin', 'currant',
+            'prune', 'apricot', 'peach', 'plum', 'cherry', 'berry',
+            'grape', 'melon', 'citrus', 'lime', 'lemon', 'orange',
+            'tangerine', 'clementine', 'mandarin', 'kumquat', 'pomelo',
+            'grapefruit', 'citron', 'bergamot', 'yuzu', 'sudachi',
+            'kabosu', 'calamansi', 'calamondin', 'limequat', 'rangpur',
+            'tangelo', 'ugli', 'minneola', 'ortanique', 'jaffa',
+            'shamouti', 'blood orange', 'navel', 'valencia', 'cara cara',
+            'hamlin', 'parson brown', 'pineapple', 'pine', 'apple',
+            'pear', 'quince', 'medlar', 'loquat', 'kumquat', 'persimmon',
+            'pomegranate', 'guava', 'papaya', 'mango', 'lychee',
+            'longan', 'rambutan', 'mangosteen', 'durian', 'jackfruit',
+            'breadfruit', 'cacao', 'coffee', 'tea', 'mate', 'kola',
+            'guarana', 'yaupon', 'holly', 'olive', 'palm', 'date palm',
+            'coconut palm', 'oil palm', 'betel', 'areca', 'nipah',
+            'raffia', 'carnauba', 'copaiba', 'babassu', 'murumuru',
+            'tucuma', 'bacuri', 'cupuacu', 'acai', 'buriti', 'ucuhuba'
         ];
 
-        const uniqueMap = new Map();
+        // Scoring function: higher = better for our business
+        function scoreService(s) {
+            const text = `${s.name || ''} ${s.category || ''}`.toLowerCase();
+            const rawName = String(s.name || '');
+            let score = 0;
+            const rate = parseFloat(s.rate) || 999;
+            const minQty = parseInt(s.min) || 999999;
+            const maxQty = parseInt(s.max) || 0;
+
+            // === SPEED BONUSES ===
+            const speedBonuses = [
+                'instant', 'immediate', 'fast', 'speedy', 'quick', 'rapid',
+                'swift', 'express', 'rush', 'flash', '0-1h', '0-1 hour',
+                '0-3h', '0-6h', '0-12h', '0-12 hour', '1-24h', '1-24 hour',
+                '0-30m', '0-30 min', 'within 1 hour', 'within 3 hours',
+                'auto start', 'auto refill', 'automatic', 'non-stop',
+                'super fast', 'ultra fast', 'hyper fast', 'lightning',
+                'real time', 'live', 'active now', 'online now'
+            ];
+            speedBonuses.forEach(kw => { if (text.includes(kw)) score += 25; });
+
+            // === SPEED PENALTIES ===
+            const speedPenalties = [
+                'gradual', 'slow', 'drip', 'drip feed', 'delayed',
+                '1-3 day', '2-3 day', '3-5 day', '5-7 day', '7-14 day',
+                'weekly', 'monthly', 'scheduled', 'batch', 'queue',
+                'waiting', 'pending start', 'manual start', 'not instant',
+                'hours to days', 'days to weeks', 'organic growth'
+            ];
+            speedPenalties.forEach(kw => { if (text.includes(kw)) score -= 40; });
+
+            // === PROFITABILITY ===
+            // Lower rate = cheaper for us = more margin
+            if (rate < 0.3) score += 30;
+            else if (rate < 0.6) score += 20;
+            else if (rate < 1.0) score += 15;
+            else if (rate < 1.5) score += 10;
+            else if (rate < 2.0) score += 5;
+            else if (rate > 5.0) score -= 15;
+            else if (rate > 10.0) score -= 30;
+            else if (rate > 20.0) score -= 50;
+
+            // === QUANTITY FLEXIBILITY ===
+            if (maxQty >= 50000) score += 10;
+            else if (maxQty >= 10000) score += 7;
+            else if (maxQty >= 5000) score += 5;
+            else if (maxQty >= 1000) score += 3;
+            else if (maxQty < 500) score -= 5;
+
+            if (minQty <= 10) score += 10;
+            else if (minQty <= 50) score += 7;
+            else if (minQty <= 100) score += 5;
+            else if (minQty <= 500) score += 2;
+            else if (minQty > 1000) score -= 10;
+
+            // === QUALITY SIGNALS ===
+            if (text.includes('refill')) score += 8;
+            if (text.includes('non drop')) score += 8;
+            if (text.includes('no drop')) score += 8;
+            if (text.includes('lifetime')) score += 5;
+            if (text.includes('permanent')) score += 5;
+            if (text.includes('real')) score += 3;
+            if (text.includes('active')) score += 3;
+            if (text.includes('hq')) score += 2;
+            if (text.includes('high quality')) score += 2;
+
+            // === NEGATIVE SIGNALS ===
+            if (text.includes('bot')) score -= 5;
+            if (text.includes('fake')) score -= 10;
+            if (text.includes('proxy')) score -= 5;
+            if (text.includes('vpn')) score -= 5;
+            if (text.includes('cracked')) score -= 20;
+            if (text.includes('hacked')) score -= 30;
+            if (text.includes('stolen')) score -= 50;
+
+            // === COUNTRY/GEO PENALTY ===
+            const geoWords = ['nigeria','india','brazil','russia','bangladesh','pakistan','egypt','kenya','ghana','uganda','tanzania','ethiopia','vietnam','indonesia','philippines'];
+            geoWords.forEach(g => { if (text.includes(g)) score -= 100; });
+
+            // === BANNED EXACT MATCHES ===
+            if (banned.some(b => text.includes(b))) score -= 200;
+
+            return score;
+        }
+
+        // Step 1: Filter valid services and score them
+        const scoredServices = [];
         for (const s of services) {
             const id = Number(s.service);
-            if (!id || uniqueMap.has(id)) continue;
+            if (!id) continue;
 
             const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
 
@@ -1219,20 +1522,60 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
             const hasAction = actions.some(a => text.includes(a));
             if (!hasAction) continue;
 
-            const hasBanned = banned.some(b => text.includes(b));
-            if (hasBanned) continue;
+            // Skip if banned
+            if (banned.some(b => text.includes(b))) continue;
 
+            const score = scoreService(s);
+            if (score < -50) continue; // Too bad even to consider
+
+            scoredServices.push({
+                serviceId: id,
+                raw: s,
+                score,
+                platform: detectPlatform({ category: s.category, name: s.name }),
+                type: detectType({ category: s.category, name: s.name }),
+                rate: parseFloat(s.rate) || 0,
+                min: parseInt(s.min) || 0,
+                max: parseInt(s.max) || 0,
+                refill: !!s.refill,
+                cancel: !!s.cancel
+            });
+        }
+
+        // Step 2: Group by (platform, type) and pick winner per group
+        const groups = new Map();
+        for (const s of scoredServices) {
+            const key = `${s.platform}_${s.type}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(s);
+        }
+
+        const winners = [];
+        for (const [key, group] of groups) {
+            // Sort by score descending, then by rate ascending (cheaper = better tiebreak)
+            group.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return a.rate - b.rate;
+            });
+            winners.push(group[0]); // Take the best one only
+        }
+
+        // Step 3: Clean names and build final list
+        const cleanServices = winners.map(w => {
+            const s = w.raw;
             let displayName = cleanServiceName({ category: s.category, name: s.name });
 
             let cleanName = String(s.name || '');
-            qualityWords.forEach(word => {
-                cleanName = cleanName.replace(new RegExp(word, 'gi'), '');
+            noiseWords.forEach(word => {
+                const re = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                cleanName = cleanName.replace(re, '');
             });
             cleanName = cleanName.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
             cleanName = cleanName.replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, '').replace(/\s+/g, ' ').trim();
+            cleanName = cleanName.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').replace(/\s+/g, ' ').trim(); // Strip emojis
 
-            uniqueMap.set(id, {
-                serviceId: id,
+            return {
+                serviceId: w.serviceId,
                 name: cleanName || displayName,
                 displayName: displayName,
                 type: String(s.type || ''),
@@ -1240,19 +1583,18 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
                 rate: String(s.rate || ''),
                 min: String(s.min || ''),
                 max: String(s.max || ''),
-                refill: !!s.refill,
-                cancel: !!s.cancel
-            });
-        }
-        const cleanServices = Array.from(uniqueMap.values());
+                refill: w.refill,
+                cancel: w.cancel
+            };
+        });
 
         await Service.deleteMany({});
         if (cleanServices.length > 0) {
             await Service.insertMany(cleanServices, { ordered: false });
         }
 
-        console.log(`[SYNC] ${services.length} raw → ${cleanServices.length} filtered`);
-        res.json({ success: true, count: cleanServices.length });
+        console.log(`[SYNC] ${services.length} raw → ${scoredServices.length} scored → ${winners.length} winners (1 per platform/type)`);
+        res.json({ success: true, count: cleanServices.length, breakdown: `${services.length} raw → ${winners.length} unique services` });
     } catch (err) {
         console.error('Sync error:', err.message);
         res.status(500).json({ error: 'Sync failed', detail: err.message });
