@@ -760,7 +760,7 @@ bot.on('callback_query:data', async (ctx) => {
         if (data === 'owner_services') {
             await ctx.reply(`🛒 *Service Catalog*\n\nOpen your dashboard to enable services and set prices 👇`, {
                 parse_mode: "Markdown",
-                reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL } })
+                reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL + '/admin' } })
             });
             return;
         }
@@ -831,7 +831,7 @@ bot.on('callback_query:data', async (ctx) => {
             text += `\nTap below to open dashboard and edit:`;
             await ctx.reply(text, {
                 parse_mode: "Markdown",
-                reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL } })
+                reply_markup: new InlineKeyboard().row({ text: '👇 Open Dashboard', web_app: { url: APP_URL + '/admin' } })
             });
             return;
         }
@@ -930,9 +930,9 @@ bot.on('callback_query:data', async (ctx) => {
         const tiers = cfg.tiers || [];
         const keyboard = new InlineKeyboard();
         const displayName = svc.displayName || cleanServiceName(svc);
-        const options = svc.options || [];
 
-        // If no options (old data or single provider), create a default option
+        // Get effective options for pricing reference
+        const options = svc.options || [];
         let effectiveOptions = options;
         if (options.length === 0) {
             effectiveOptions = [{
@@ -947,31 +947,55 @@ bot.on('callback_query:data', async (ctx) => {
                 reliabilityScore: 100
             }];
         }
+        const bestRate = effectiveOptions.sort((a,b) => a.rate - b.rate)[0]?.rate || 1;
 
-        // Build option list with pricing and delivery estimates
+        // Build tier list like the old version
         let text = `🛒 *${escapeMarkdown(displayName)}*\n\n`;
-        text += `Choose your preferred speed & price:\n\n`;
+        text += `Min: ${svc.min || effectiveOptions[0].min} | Max: ${svc.max || effectiveOptions[0].max}\n`;
+        text += `Refill: ${(svc.refill || effectiveOptions[0].refill) ? '✅ Yes (30 days)' : '❌ No'}\n\n`;
+        text += `*Select your quantity tier:*\n`;
 
-        effectiveOptions.forEach((opt, idx) => {
-            const price = getTierDisplayPrice(opt.rate, (tiers[0]?.maxQty || 500), cfg);
-            const duration = formatDuration(opt.deliveryMinutes);
-            const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
-
-            text += `${idx+1}. ${speedLabel}\n`;
-            text += `   KES ${price} per ${tiers[0]?.maxQty || 500} qty\n`;
-            text += `   Delivery: ${duration}\n`;
-            text += `   Min: ${opt.min} | Max: ${opt.max}\n\n`;
-
-            const btnLabel = `${speedLabel} | KES ${price} | ${duration}`;
-            keyboard.text(btnText(btnLabel), `opt_${serviceId}_${idx}`).row();
+        tiers.forEach(t => {
+            const price = getTierDisplayPrice(bestRate, t.maxQty, cfg);
+            text += `• ${t.label}: ${t.minQty.toLocaleString()} - ${t.maxQty.toLocaleString()} qty\n`;
         });
+        text += `\n_Price shown is for max tier qty. Actual price scales with your quantity._`;
 
-        text += `*All options include refill guarantee where available.*\n`;
-        text += `⏳ Delivery times are estimates and may vary by platform load.`;
-
+        for (const tier of tiers) {
+            const price = getTierDisplayPrice(bestRate, tier.maxQty, cfg);
+            const btnLabel = `${tier.label}\n${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()} @ KES ${price}`;
+            keyboard.text(btnText(btnLabel), `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
+        }
         keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
 
         await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
+        return;
+    }
+
+    if (data.startsWith('provider_')) {
+        const idx = parseInt(data.replace('provider_', ''));
+        const state = customerPendingInputs.get(userId);
+        if (!state || state.action !== 'awaiting_provider_choice') {
+            await ctx.reply("⚠️ Session expired. Please start over with /start");
+            return;
+        }
+        const options = state.data.options || [];
+        const selectedOpt = options[idx];
+        if (!selectedOpt) return ctx.reply("❌ Option not found.");
+
+        state.data.selectedProvider = selectedOpt;
+        state.action = 'awaiting_link';
+
+        await ctx.reply(
+            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected\n\n` +
+            `Now send the link or username to promote:\n` +
+            `_Examples:_\n` +
+            `• Instagram: \`https://instagram.com/username\`\n` +
+            `• TikTok: \`https://tiktok.com/@username\`\n` +
+            `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
+            `• Telegram: \`https://t.me/channelname\``,
+            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+        );
         return;
     }
 
@@ -1206,7 +1230,9 @@ bot.on('message:text', async (ctx) => {
             else if (!phone.startsWith('254')) phone = '254' + phone;
             if (phone.length !== 12) { await ctx.reply("❌ Invalid phone. Use format: 07XXXXXXXX"); return; }
 
-            const { serviceId, provider, providerServiceId, serviceName, link, quantity, price } = customerState.data;
+            const { serviceId, selectedProvider, serviceName, link, quantity, price } = customerState.data;
+            const provider = selectedProvider?.provider || 'smmfollows';
+            const providerServiceId = selectedProvider?.providerServiceId || serviceId;
             const reference = `ORD${Date.now()}`;
 
             const freshStore = await getDefaultStore(true);
@@ -1857,7 +1883,29 @@ app.get('/api/stats', validateInitData, async (req, res) => {
 app.get('/api/web/services', async (req, res) => {
     const store = await getDefaultStore();
     const enabled = store?.enabledServices?.filter(s => s.isEnabled) || [];
-    const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } }).sort({ platform: 1, type: 1 });
+    let services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } }).sort({ platform: 1, type: 1 });
+
+    // Fallback: if services lack platform field (old schema), derive from category/name
+    services = services.map(s => {
+        if (!s.platform) {
+            const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
+            const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
+            for (const p of platforms) {
+                if (text.includes(p)) { s.platform = p; break; }
+            }
+            if (!s.platform) s.platform = s.category || 'other';
+        }
+        if (!s.type) {
+            const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
+            const types = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
+            for (const t of types) {
+                if (text.includes(t)) { s.type = t; break; }
+            }
+            if (!s.type) s.type = 'other';
+        }
+        return s;
+    });
+
     res.json(services);
 });
 
