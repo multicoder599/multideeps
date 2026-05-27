@@ -381,7 +381,7 @@ function getTypeKeyboard(services, platform) {
         followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧'
     };
     for (const t of typeList) {
-        keyboard.text(`${typeEmojis[t] || '🔧'} ${t.charAt(0).toUpperCase() + type.slice(1)}`, `type_${platform}_${t}`).row();
+        keyboard.text(`${typeEmojis[t] || '🔧'} ${t.charAt(0).toUpperCase() + t.slice(1)}`, `type_${platform}_${t}`).row();
     }
     keyboard.text('🔙 Back to Platforms', 'back_platforms');
     return keyboard;
