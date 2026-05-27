@@ -3,159 +3,464 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Multi Social Deeps - Boost Your Social Media</title>
+<title>Multi Social Deeps — Instant Social Proof</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0a0a0f; color: #fff; overflow-x: hidden; padding-bottom: 100px; }
+  :root {
+    --bg: #030712;
+    --bg-elevated: #0f172a;
+    --bg-card: #111827;
+    --border: #1e293b;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --primary: #6366f1;
+    --primary-light: #818cf8;
+    --accent: #8b5cf6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+  }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
   .hidden { display: none !important; }
 
-  #init-loader { position: fixed; inset: 0; background: #0a0a0f; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #init-loader .spinner { width: 40px; height: 40px; border: 3px solid #222; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
-  #init-loader p { color: #888; font-size: 14px; font-weight: 600; }
+  /* Loader */
+  #loader {
+    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .loader-ring {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .app-header { position: sticky; top: 0; z-index: 100; background: rgba(10,10,15,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; height: 56px; }
-  .app-header h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, #8b5cf6, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .app-header .admin-link { font-size: 12px; color: #666; text-decoration: none; font-weight: 600; }
+  /* Nav */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(3,7,18,0.8); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px;
+  }
+  .logo {
+    font-size: 20px; font-weight: 900; letter-spacing: -0.5px;
+    background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .nav-btn {
+    background: var(--gradient); color: #fff; border: none;
+    padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 13px;
+    cursor: pointer; font-family: inherit;
+  }
 
-  .hero { position: relative; width: 100%; height: 280px; overflow: hidden; }
-  .hero img { width: 100%; height: 100%; object-fit: cover; }
-  .hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 40%, #0a0a0f 100%); }
-  .hero-text { position: absolute; bottom: 20px; left: 16px; right: 16px; }
-  .hero-text h2 { font-size: 24px; font-weight: 800; margin-bottom: 6px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
-  .hero-text p { font-size: 14px; color: #ccc; font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+  /* Hero */
+  .hero {
+    text-align: center; padding: 60px 24px 40px;
+    max-width: 800px; margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);
+    color: var(--primary-light); padding: 8px 16px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: clamp(32px, 6vw, 56px); font-weight: 900;
+    line-height: 1.1; letter-spacing: -1.5px; margin-bottom: 16px;
+    background: linear-gradient(180deg, #fff 0%, #94a3b8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 18px; color: var(--text-muted); max-width: 560px;
+    margin: 0 auto 32px; font-weight: 500;
+  }
 
-  .section-title { font-size: 18px; font-weight: 800; margin: 24px 16px 12px; letter-spacing: -0.3px; }
-  .section-sub { font-size: 13px; color: #888; margin: -8px 16px 16px; font-weight: 500; }
+  /* Platform Icons */
+  .platform-bar {
+    display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .platform-pill {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .platform-pill:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .platform-pill svg { width: 24px; height: 24px; }
 
-  .platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 16px; }
-  .platform-card { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 20px 10px; text-align: center; cursor: pointer; transition: all 0.2s; }
-  .platform-card:hover { border-color: #8b5cf6; transform: translateY(-2px); }
-  .platform-card .icon { width: 48px; height: 48px; margin: 0 auto 10px; }
-  .platform-card .name { font-size: 13px; font-weight: 700; color: #fff; }
-  .platform-card .count { font-size: 11px; color: #666; margin-top: 4px; font-weight: 500; }
+  /* CTA Buttons */
+  .cta-row {
+    display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .btn-main {
+    background: var(--gradient); color: #fff; border: none;
+    padding: 14px 28px; border-radius: 10px; font-weight: 800; font-size: 15px;
+    cursor: pointer; font-family: inherit; transition: opacity 0.2s;
+  }
+  .btn-main:hover { opacity: 0.9; }
+  .btn-ghost {
+    background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+    padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 15px;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--primary); }
 
-  .service-list { padding: 0 16px; }
-  .service-item { background: #15151a; border: 1px solid #222; border-radius: 14px; padding: 16px; margin-bottom: 10px; }
-  .service-item .service-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .service-item .service-name { font-size: 16px; font-weight: 700; }
-  .service-item .service-type { font-size: 11px; color: #888; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
-  .service-item .options { display: flex; flex-direction: column; gap: 8px; }
-  .option-btn { display: flex; align-items: center; justify-content: space-between; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: all 0.2s; }
-  .option-btn:hover { border-color: #8b5cf6; background: #1f1f2e; }
-  .option-btn .opt-left { display: flex; flex-direction: column; gap: 2px; }
-  .option-btn .opt-speed { font-size: 13px; font-weight: 700; }
-  .option-btn .opt-meta { font-size: 11px; color: #888; }
-  .option-btn .opt-right { text-align: right; }
-  .option-btn .opt-price { font-size: 18px; font-weight: 800; color: #34c759; font-family: 'JetBrains Mono', monospace; }
-  .option-btn .opt-duration { font-size: 11px; color: #ff9f0a; font-weight: 600; }
+  /* Trust badges */
+  .trust-row {
+    display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .trust-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    color: var(--text-muted);
+  }
+  .trust-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot-green { background: var(--success); }
+  .dot-blue { background: var(--primary); }
+  .dot-purple { background: var(--accent); }
+  .dot-orange { background: var(--warning); }
 
-  .back-btn { background: none; border: none; color: #8b5cf6; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; margin: 16px; }
+  .trust-text {
+    text-align: center; font-size: 13px; color: var(--text-muted);
+    margin-bottom: 60px;
+  }
 
-  .form-group { margin-bottom: 16px; padding: 0 16px; }
-  .form-label { display: block; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 700; }
-  .form-input { width: 100%; background: #1a1a24; border: 1px solid #333; color: #fff; padding: 16px; border-radius: 12px; font-size: 16px; outline: none; font-family: 'Plus Jakarta Sans', sans-serif; }
-  .form-input:focus { border-color: #8b5cf6; }
-  .form-hint { font-size: 12px; color: #666; margin-top: 6px; font-weight: 500; }
+  /* Section headers */
+  .section {
+    max-width: 1200px; margin: 0 auto; padding: 60px 24px;
+  }
+  .section-label {
+    text-align: center; font-size: 12px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 2px; color: var(--primary-light);
+    margin-bottom: 8px;
+  }
+  .section h2 {
+    text-align: center; font-size: clamp(28px, 4vw, 40px);
+    font-weight: 900; letter-spacing: -1px; margin-bottom: 12px;
+  }
+  .section > p {
+    text-align: center; color: var(--text-muted); font-size: 16px;
+    max-width: 500px; margin: 0 auto 40px;
+  }
 
-  .btn-primary { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: #fff; border: none; padding: 16px 24px; border-radius: 12px; font-weight: 800; font-size: 16px; cursor: pointer; width: calc(100% - 32px); margin: 0 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-secondary { background: #1a1a24; color: #fff; border: 1px solid #333; padding: 14px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; width: calc(100% - 32px); margin: 0 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
+  /* How It Works */
+  .steps {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px; max-width: 900px; margin: 0 auto;
+  }
+  .step-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+  .step-num {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--gradient); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px; margin-bottom: 16px;
+  }
+  .step-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+  .step-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
 
-  .order-summary { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 20px; margin: 16px; }
-  .order-summary .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
-  .order-summary .summary-row .label { color: #888; font-weight: 500; }
-  .order-summary .summary-row .value { font-weight: 700; }
-  .order-summary .summary-total { border-top: 1px solid #222; padding-top: 12px; margin-top: 12px; }
-  .order-summary .summary-total .value { font-size: 22px; color: #34c759; font-family: 'JetBrains Mono', monospace; }
+  /* Guarantee Banner */
+  .guarantee {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);
+    border-top: 1px solid rgba(99,102,241,0.2);
+    border-bottom: 1px solid rgba(99,102,241,0.2);
+    padding: 48px 24px;
+  }
+  .guarantee-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px;
+  }
+  .guarantee-text h3 {
+    font-size: 24px; font-weight: 900; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .guarantee-text ul { list-style: none; }
+  .guarantee-text li {
+    font-size: 14px; color: #c4b5fd; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .guarantee-text li::before { content: "✓"; color: var(--success); font-weight: 800; }
 
-  .status-card { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 24px; margin: 16px; text-align: center; }
-  .status-card .status-icon { font-size: 48px; margin-bottom: 12px; }
-  .status-card .status-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
-  .status-card .status-text { font-size: 14px; color: #888; margin-bottom: 16px; line-height: 1.5; }
+  /* Platform Selector */
+  .platform-selector {
+    display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .platform-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; color: var(--text);
+  }
+  .platform-chip:hover, .platform-chip.active {
+    border-color: var(--primary); background: rgba(99,102,241,0.1);
+  }
+  .platform-chip svg { width: 18px; height: 18px; }
 
-  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #1a1a24; border: 1px solid #333; color: #34c759; padding: 14px 24px; border-radius: 12px; font-weight: 700; z-index: 200; display: flex; align-items: center; gap: 8px; animation: slideDown 0.3s ease; }
-  @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  /* Package Cards */
+  .packages-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+  .pkg-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; position: relative;
+    transition: all 0.2s;
+  }
+  .pkg-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+  .pkg-card .pkg-tag {
+    position: absolute; top: -1px; right: 20px;
+    background: var(--gradient); color: #fff;
+    padding: 4px 12px; border-radius: 0 0 8px 8px;
+    font-size: 11px; font-weight: 800; text-transform: uppercase;
+  }
+  .pkg-card h4 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+  .pkg-card .pkg-type { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 16px; }
+  .pkg-card .pkg-meta { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .pkg-card .pkg-meta-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .pkg-card .pkg-meta-row .label { color: var(--text-muted); }
+  .pkg-card .pkg-meta-row .value { font-weight: 700; }
+  .pkg-card .pkg-price {
+    font-size: 32px; font-weight: 900; font-family: 'JetBrains Mono', monospace;
+    background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+  .pkg-card .pkg-price span { font-size: 14px; font-weight: 500; color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); }
+  .pkg-card button {
+    width: 100%; background: var(--gradient); color: #fff; border: none;
+    padding: 12px; border-radius: 10px; font-weight: 800; font-size: 14px;
+    cursor: pointer; font-family: inherit;
+  }
 
-  .disclaimer { background: #1a1200; border: 1px solid #332200; border-radius: 10px; padding: 12px; margin: 0 16px 16px; font-size: 12px; color: #ff9f0a; font-weight: 500; line-height: 1.5; }
-  .disclaimer strong { color: #fff; }
+  /* Order Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+    z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0; width: 100%; max-width: 560px;
+    max-height: 90vh; overflow-y: auto; padding: 32px 24px 40px;
+    transform: translateY(100%); transition: transform 0.3s;
+  }
+  .modal-overlay.active .modal { transform: translateY(0); }
+  .modal h3 { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
+  .modal .modal-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
 
-  .empty-state { text-align: center; padding: 60px 20px; color: #666; }
-  .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+  .form-group { margin-bottom: 20px; }
+  .form-group label {
+    display: block; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-muted); margin-bottom: 8px;
+  }
+  .form-group input, .form-group select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 14px 16px; border-radius: 12px;
+    font-size: 16px; outline: none; font-family: inherit;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+  .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
 
-  @media (min-width: 768px) {
-    .platform-grid { grid-template-columns: repeat(4, 1fr); max-width: 600px; margin: 0 auto; }
-    .service-list, .form-group { max-width: 600px; margin: 0 auto; padding: 0; }
-    .service-item { max-width: 600px; margin: 0 auto 10px; }
-    .btn-primary, .btn-secondary { max-width: 600px; margin: 0 auto; display: block; }
-    .order-summary, .status-card, .disclaimer { max-width: 600px; margin: 16px auto; }
-    .back-btn { max-width: 600px; margin: 16px auto; }
-    .section-title, .section-sub { max-width: 600px; margin: 24px auto 12px; }
-    .hero { height: 350px; }
-    .hero-text { max-width: 600px; margin: 0 auto; left: 0; right: 0; padding: 0 16px; }
+  .summary-box {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 24px;
+  }
+  .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+  .summary-row .label { color: var(--text-muted); }
+  .summary-row .value { font-weight: 700; }
+  .summary-row.total { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .summary-row.total .value { font-size: 24px; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--success); }
+
+  .disclaimer {
+    background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2);
+    border-radius: 10px; padding: 14px; margin-bottom: 20px;
+    font-size: 13px; color: var(--warning); line-height: 1.5;
+  }
+
+  .btn-block {
+    width: 100%; background: var(--gradient); color: #fff; border: none;
+    padding: 16px; border-radius: 12px; font-weight: 800; font-size: 16px;
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-block:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-block.secondary {
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text); margin-top: 10px;
+  }
+
+  /* Status */
+  .status-screen {
+    text-align: center; padding: 40px 20px;
+  }
+  .status-screen .icon { font-size: 64px; margin-bottom: 16px; }
+  .status-screen h3 { font-size: 24px; font-weight: 900; margin-bottom: 8px; }
+  .status-screen p { color: var(--text-muted); font-size: 15px; margin-bottom: 24px; }
+  .status-screen .ref {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    background: var(--bg-card); padding: 10px 16px; border-radius: 8px;
+    display: inline-block; margin-bottom: 24px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px);
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text);
+    padding: 14px 24px; border-radius: 12px; font-weight: 700; z-index: 300;
+    display: flex; align-items: center; gap: 8px; transition: transform 0.3s;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* Footer */
+  .footer {
+    text-align: center; padding: 40px 24px; border-top: 1px solid var(--border);
+    color: var(--text-muted); font-size: 13px;
+  }
+
+  @media (max-width: 640px) {
+    .nav-inner { padding: 12px 16px; }
+    .hero { padding: 40px 16px 30px; }
+    .section { padding: 40px 16px; }
+    .guarantee-inner { flex-direction: column; text-align: center; }
+    .packages-grid { grid-template-columns: 1fr; }
   }
 </style>
 <base target="_blank">
 </head>
 <body>
 
-<div id="init-loader">
-  <div class="spinner"></div>
-  <p>Loading Multi Social Deeps...</p>
-</div>
+<div id="loader"><div class="loader-ring"></div></div>
 
-<div id="app">
-  <div class="app-header">
-    <h1>🚀 Multi Social Deeps</h1>
-    <a href="/admin" class="admin-link">Admin →</a>
+<!-- Toast -->
+<div id="toast" class="toast"><span id="toast-icon">ℹ️</span><span id="toast-msg">Loading...</span></div>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="logo">🚀 Multi Social Deeps</div>
+    <button class="nav-btn" onclick="scrollToPackages()">Get Started</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot dot-green"></span>
+    Kenya's #1 Social Growth Service
+  </div>
+  <h1>Gain Instant Social Proof.</h1>
+  <p>From KES 20 to full buzz status — grow on 7 platforms, pay with M-Pesa, delivery starts in minutes.</p>
+
+  <div class="platform-bar" id="hero-platforms"></div>
+
+  <div class="cta-row">
+    <button class="btn-main" onclick="scrollToPackages()">View Packages</button>
+    <button class="btn-ghost" onclick="scrollToHow()">How It Works</button>
+    <button class="btn-ghost" onclick="showTrackModal()">Track Order</button>
   </div>
 
-  <!-- HERO / WELCOME -->
-  <div class="hero">
-    <img id="welcome-img" src="/welcome-default.jpg" alt="Welcome" onerror="this.style.display='none'">
-    <div class="hero-overlay"></div>
-    <div class="hero-text">
-      <h2 id="welcome-title">Grow Your Audience</h2>
-      <p id="welcome-sub">Real growth. Real engagement. Real results.</p>
+  <div class="trust-row">
+    <div class="trust-badge"><span class="dot dot-green"></span>Secure M-Pesa</div>
+    <div class="trust-badge"><span class="dot dot-blue"></span>Fast Delivery</div>
+    <div class="trust-badge"><span class="dot dot-purple"></span>Drop-Proof Refill</div>
+    <div class="trust-badge"><span class="dot dot-orange"></span>24/7 Support</div>
+  </div>
+  <div class="trust-text">Trusted by Kenyan creators & page owners</div>
+</section>
+
+<!-- How It Works -->
+<section class="section" id="how-it-works">
+  <div class="section-label">Simple Process</div>
+  <h2>How It Works</h2>
+  <p>Three steps. Done in under 2 minutes.</p>
+  <div class="steps">
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <h3>Pick Your Platform & Package</h3>
+      <p>Choose your social network and tier — from KES 20 Starter Boost to KES 5,000 bulk VIP.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <h3>Pay via M-Pesa in Seconds</h3>
+      <p>Enter your Safaricom number, get an STK push from Industry — just enter your PIN. No card, no bank.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <h3>Watch Your Numbers Climb</h3>
+      <p>Followers and views arrive within minutes of payment. No login needed, no password ever shared.</p>
     </div>
   </div>
+</section>
 
-  <!-- PLATFORMS -->
-  <div id="screen-platforms">
-    <div class="section-title">Choose Platform</div>
-    <div class="section-sub">Select where you want to boost your presence</div>
-    <div class="platform-grid" id="platforms-grid"></div>
+<!-- Guarantee -->
+<section class="guarantee">
+  <div class="guarantee-inner">
+    <div class="guarantee-text">
+      <h3>🛡️ Our Triple Guarantee</h3>
+      <ul>
+        <li>48-hour delivery — or we refund 100% of your payment, no questions asked.</li>
+        <li>30-day auto-refill — numbers drop? We top you back up automatically. Free.</li>
+        <li>Batch delivery — followers added gradually so your account stays safe from platform flags.</li>
+      </ul>
+    </div>
+    <button class="btn-main" onclick="scrollToPackages()">See Packages</button>
   </div>
+</section>
 
-  <!-- SERVICE TYPES -->
-  <div id="screen-types" class="hidden">
-    <button class="back-btn" onclick="showPlatforms()">← Back to Platforms</button>
-    <div class="section-title" id="types-title">Instagram</div>
-    <div class="section-sub">Choose the type of service</div>
-    <div class="service-list" id="types-list"></div>
+<!-- Packages -->
+<section class="section" id="packages">
+  <div class="section-label">Service Catalog</div>
+  <h2>Choose Your Platform</h2>
+  <p>Start with what you use the most. Prices update in real-time.</p>
+
+  <div class="platform-selector" id="platform-selector"></div>
+
+  <div id="packages-container">
+    <div class="packages-grid" id="packages-grid"></div>
   </div>
+</section>
 
-  <!-- SERVICES -->
-  <div id="screen-services" class="hidden">
-    <button class="back-btn" onclick="showTypes(currentPlatform)">← Back to Types</button>
-    <div class="section-title" id="services-title">Followers</div>
-    <div class="section-sub">Pick your speed & price</div>
-    <div class="service-list" id="services-list"></div>
-  </div>
+<!-- Footer -->
+<footer class="footer">
+  <p>© 2026 Multi Social Deeps. All rights reserved.</p>
+  <p style="margin-top:4px;">Not affiliated with Instagram, TikTok, Twitter, Facebook, or YouTube.</p>
+</footer>
 
-  <!-- ORDER FORM -->
-  <div id="screen-order" class="hidden">
-    <button class="back-btn" onclick="showServices(currentPlatform, currentType)">← Back to Services</button>
-    <div class="section-title">Place Order</div>
+<!-- Order Modal -->
+<div class="modal-overlay" id="order-modal">
+  <div class="modal">
+    <h3 id="modal-title">Place Order</h3>
+    <p class="modal-sub" id="modal-sub">Complete your details below</p>
 
-    <div class="order-summary">
-      <div class="summary-row"><span class="label">Service</span><span class="value" id="order-service">-</span></div>
-      <div class="summary-row"><span class="label">Speed</span><span class="value" id="order-speed">-</span></div>
-      <div class="summary-row"><span class="label">Min / Max</span><span class="value" id="order-limits">-</span></div>
-      <div class="summary-row summary-total"><span class="label">Price per 500</span><span class="value" id="order-price">-</span></div>
+    <div class="summary-box">
+      <div class="summary-row"><span class="label">Service</span><span class="value" id="sum-service">-</span></div>
+      <div class="summary-row"><span class="label">Speed</span><span class="value" id="sum-speed">-</span></div>
+      <div class="summary-row"><span class="label">Quantity Range</span><span class="value" id="sum-range">-</span></div>
+      <div class="summary-row total"><span class="label">Price per 500</span><span class="value" id="sum-price">-</span></div>
     </div>
 
     <div class="disclaimer">
@@ -163,99 +468,93 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">LINK OR USERNAME</label>
-      <input class="form-input" id="order-link" placeholder="https://instagram.com/yourusername">
-      <div class="form-hint">Paste the full URL to your profile, post, or video</div>
+      <label>Link or Username</label>
+      <input type="text" id="order-link" placeholder="https://instagram.com/yourusername">
+      <div class="hint">Paste the full URL to your profile, post, or video</div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">QUANTITY</label>
-      <input class="form-input" id="order-quantity" type="number" placeholder="100">
-      <div class="form-hint" id="qty-hint">Enter a value between 50 and 10,000</div>
+      <label>Quantity</label>
+      <input type="number" id="order-qty" placeholder="100">
+      <div class="hint" id="qty-hint">Enter a value between 50 and 10,000</div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">M-PESA PHONE NUMBER</label>
-      <input class="form-input" id="order-phone" placeholder="07XX XXX XXX">
-      <div class="form-hint">You'll receive an STK push to complete payment</div>
+      <label>M-Pesa Phone Number</label>
+      <input type="tel" id="order-phone" placeholder="07XX XXX XXX">
+      <div class="hint">You'll receive an STK push to complete payment</div>
     </div>
 
     <div class="form-group">
-      <label class="form-label">YOUR NAME (Optional)</label>
-      <input class="form-input" id="order-name" placeholder="John Doe">
+      <label>Your Name (Optional)</label>
+      <input type="text" id="order-name" placeholder="John Doe">
     </div>
 
-    <button class="btn-primary" id="btn-pay" onclick="submitOrder()">💳 PROCEED TO PAY</button>
+    <button class="btn-block" id="btn-submit" onclick="submitOrder()">💳 PROCEED TO PAY — KES <span id="btn-price">0</span></button>
+    <button class="btn-block secondary" onclick="closeModal()">Cancel</button>
   </div>
+</div>
 
-  <!-- PAYMENT STATUS -->
-  <div id="screen-status" class="hidden">
-    <div class="status-card" id="status-card">
-      <div class="status-icon">⏳</div>
-      <div class="status-title">Processing Payment</div>
-      <div class="status-text">Check your phone for the M-Pesa prompt and enter your PIN to complete.</div>
-      <button class="btn-secondary" onclick="checkOrderStatus()" style="margin-top:12px;width:auto;display:inline-block;">🔄 Check Status</button>
-    </div>
-  </div>
-
-  <!-- ORDER SUCCESS -->
-  <div id="screen-success" class="hidden">
-    <div class="status-card">
-      <div class="status-icon">🎉</div>
-      <div class="status-title">Payment Successful!</div>
-      <div class="status-text">Your order has been placed and is now being processed. You'll receive updates automatically.</div>
-      <div style="margin-top:16px;font-size:13px;color:#888;">
-        Order Ref: <span id="success-ref" style="color:#fff;font-family:'JetBrains Mono',monospace;">-</span>
-      </div>
-      <button class="btn-primary" onclick="showPlatforms()" style="margin-top:20px;">🛒 Order More</button>
+<!-- Status Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal" style="text-align:center;padding-top:40px;">
+    <div class="status-screen">
+      <div class="icon" id="status-icon">⏳</div>
+      <h3 id="status-title">Processing Payment</h3>
+      <p id="status-text">Check your phone for the M-Pesa prompt and enter your PIN to complete.</p>
+      <div class="ref" id="status-ref">-</div>
+      <button class="btn-block" onclick="checkOrderStatus()">🔄 Check Status</button>
+      <button class="btn-block secondary" onclick="closeStatusModal()">Close</button>
     </div>
   </div>
 </div>
 
+<!-- Track Modal -->
+<div class="modal-overlay" id="track-modal">
+  <div class="modal">
+    <h3>Track Your Order</h3>
+    <p class="modal-sub">Enter your order reference to check status</p>
+    <div class="form-group">
+      <label>Order Reference</label>
+      <input type="text" id="track-ref" placeholder="ORD1234567890 or WEB1234567890">
+    </div>
+    <button class="btn-block" onclick="trackOrder()">🔍 Check Status</button>
+    <button class="btn-block secondary" onclick="closeTrackModal()">Cancel</button>
+    <div id="track-result" style="margin-top:20px;"></div>
+  </div>
+</div>
+
 <script>
-// ==================== STATE ====================
+// ==================== DATA & STATE ====================
 const API_BASE = '';
-let storeConfig = null;
 let allServices = [];
+let storeConfig = null;
 let currentPlatform = '';
-let currentType = '';
 let currentService = null;
 let currentOptionIdx = 0;
 let currentSessionId = '';
 let currentReference = '';
 
-const PLATFORM_ICONS = {
-  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>',
-  tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.88-2.89 2.89 2.89 0 0 1 2.88-2.89c.2 0 .39.02.58.05V9.3a6.35 6.35 0 0 0-.58-.03A6.34 6.34 0 0 0 3 15.61a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V7.55a8.15 8.15 0 0 0 4.91 1.64V5.74a4.85 4.85 0 0 1-1-.05z"/></svg>',
-  twitter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
-  facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-  youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-  telegram: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.329-.913.489-1.302.481-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
-  reddit: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.532 1.14-.861 2.56-1.378 4.097-1.378 1.068 0 2.083.264 2.982.738-.605-3.186-3.24-5.588-6.398-5.588-.608 0-1.196.084-1.754.24l-.942-4.42c-.136-.61-.715-1.054-1.372-1.054zM9.06 8.179c1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 2.77 0 5.016 2.24 5.016 5.017 0 .816-.196 1.584-.54 2.264-1.084 2.177-3.502 3.704-6.306 3.704-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-2.804 0-5.222-1.527-6.306-3.704a5.013 5.013 0 0 1-.54-2.264c0-2.777 2.246-5.017 5.016-5.017z"/></svg>',
-  snapchat: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 0 1 .17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 0 0-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 0 1 .17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 0 0-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793z"/></svg>',
-  whatsapp: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>'
+const PLATFORM_META = {
+  instagram: { name: 'Instagram', color: '#E4405F', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>' },
+  tiktok: { name: 'TikTok', color: '#fff', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.88-2.89 2.89 2.89 0 012.88-2.89c.2 0 .39.02.58.05V9.3a6.35 6.35 0 00-.58-.03A6.34 6.34 0 003 15.61a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V7.55a8.15 8.15 0 004.91 1.64V5.74a4.85 4.85 0 01-1-.05z"/></svg>' },
+  twitter: { name: 'X / Twitter', color: '#fff', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>' },
+  facebook: { name: 'Facebook', color: '#1877F2', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>' },
+  youtube: { name: 'YouTube', color: '#FF0000', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>' },
+  telegram: { name: 'Telegram', color: '#26A5E4', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.329-.913.489-1.302.481-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>' },
+  reddit: { name: 'Reddit', color: '#FF4500', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 01-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.532 1.14-.861 2.56-1.378 4.097-1.378 1.068 0 2.083.264 2.982.738-.605-3.186-3.24-5.588-6.398-5.588-.608 0-1.196.084-1.754.24l-.942-4.42c-.136-.61-.715-1.054-1.372-1.054zM9.06 8.179c1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 2.77 0 5.016 2.24 5.016 5.017 0 .816-.196 1.584-.54 2.264-1.084 2.177-3.502 3.704-6.306 3.704-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-2.804 0-5.222-1.527-6.306-3.704a5.013 5.013 0 01-.54-2.264c0-2.777 2.246-5.017 5.016-5.017z"/></svg>' },
+  snapchat: { name: 'Snapchat', color: '#FFFC00', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 01.17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 01.17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 01.17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 00-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 01.17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 01.17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 01.17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 00-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793z"/></svg>' },
+  whatsapp: { name: 'WhatsApp', color: '#25D366', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>' }
 };
 
-const PLATFORM_NAMES = {
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-  twitter: 'Twitter / X',
-  facebook: 'Facebook',
-  youtube: 'YouTube',
-  telegram: 'Telegram',
-  reddit: 'Reddit',
-  snapchat: 'Snapchat',
-  whatsapp: 'WhatsApp'
-};
-
-const TYPE_EMOJIS = {
-  followers: '👥',
-  subscribers: '🔔',
-  members: '👥',
-  views: '👁️',
-  likes: '❤️',
-  comments: '💬',
-  other: '🔧'
+const TYPE_LABELS = {
+  followers: 'Followers',
+  subscribers: 'Subscribers',
+  members: 'Members',
+  views: 'Views',
+  likes: 'Likes',
+  comments: 'Comments',
+  other: 'Boost'
 };
 
 // ==================== INIT ====================
@@ -263,185 +562,193 @@ async function init() {
   try {
     const store = await fetch(`${API_BASE}/api/web/store`).then(r => r.json());
     storeConfig = store;
-    if (store.welcomePhoto) {
-      document.getElementById('welcome-img').src = store.welcomePhoto;
-    }
-    if (store.welcomeMessage) {
-      document.getElementById('welcome-sub').textContent = store.welcomeMessage;
-    }
-    document.getElementById('welcome-title').textContent = store.botName || 'Grow Your Audience';
-  } catch (e) {
-    console.error('Store load error:', e);
-  }
+  } catch (e) { console.error('Store load error:', e); }
 
   try {
     const services = await fetch(`${API_BASE}/api/web/services`).then(r => r.json());
     allServices = services;
-    renderPlatforms();
   } catch (e) {
     console.error('Services load error:', e);
-    showToast('❌ Failed to load services');
+    showToast('Failed to load services', 'error');
   }
 
-  document.getElementById('init-loader').classList.add('hidden');
+  renderHeroPlatforms();
+  renderPlatformSelector();
+  selectPlatform(Object.keys(PLATFORM_META)[0] || 'instagram');
+
+  document.getElementById('loader').style.display = 'none';
 }
 
 // ==================== RENDERERS ====================
-function renderPlatforms() {
-  const grid = document.getElementById('platforms-grid');
-  const platforms = {};
-  allServices.forEach(s => {
-    const p = s.platform || s.category;
-    if (!platforms[p]) platforms[p] = 0;
-    platforms[p]++;
+function renderHeroPlatforms() {
+  const container = document.getElementById('hero-platforms');
+  const platforms = [...new Set(allServices.map(s => s.platform || s.category))].filter(p => PLATFORM_META[p]);
+  if (platforms.length === 0) {
+    // Show all supported platforms even if no services yet
+    Object.keys(PLATFORM_META).slice(0, 7).forEach(p => {
+      const meta = PLATFORM_META[p];
+      const chip = document.createElement('div');
+      chip.className = 'platform-pill';
+      chip.innerHTML = meta.icon;
+      chip.style.color = meta.color;
+      chip.onclick = () => { scrollToPackages(); selectPlatform(p); };
+      container.appendChild(chip);
+    });
+    return;
+  }
+  platforms.forEach(p => {
+    const meta = PLATFORM_META[p];
+    if (!meta) return;
+    const chip = document.createElement('div');
+    chip.className = 'platform-pill';
+    chip.innerHTML = meta.icon;
+    chip.style.color = meta.color;
+    chip.onclick = () => { scrollToPackages(); selectPlatform(p); };
+    container.appendChild(chip);
   });
+}
 
-  grid.innerHTML = Object.entries(platforms).map(([plat, count]) => {
-    const icon = PLATFORM_ICONS[plat] || '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>';
-    const name = PLATFORM_NAMES[plat] || plat.charAt(0).toUpperCase() + plat.slice(1);
-    return `
-      <div class="platform-card" onclick="showTypes('${plat}')">
-        <div class="icon" style="color:#8b5cf6;">${icon}</div>
-        <div class="name">${name}</div>
-        <div class="count">${count} services</div>
-      </div>
-    `;
+function renderPlatformSelector() {
+  const container = document.getElementById('platform-selector');
+  const platforms = [...new Set(allServices.map(s => s.platform || s.category))].filter(p => PLATFORM_META[p]);
+  if (platforms.length === 0) platforms.push('instagram', 'tiktok', 'twitter', 'facebook', 'youtube', 'telegram');
+
+  container.innerHTML = platforms.map(p => {
+    const meta = PLATFORM_META[p];
+    return `<button class="platform-chip" data-platform="${p}" onclick="selectPlatform('${p}')">${meta.icon} ${meta.name}</button>`;
   }).join('');
 }
 
-function showPlatforms() {
-  hideAllScreens();
-  document.getElementById('screen-platforms').classList.remove('hidden');
-  window.scrollTo(0, 0);
-}
-
-function showTypes(platform) {
+function selectPlatform(platform) {
   currentPlatform = platform;
-  hideAllScreens();
-  document.getElementById('screen-types').classList.remove('hidden');
-  document.getElementById('types-title').textContent = PLATFORM_NAMES[platform] || platform;
-
-  const types = new Set();
-  allServices.filter(s => (s.platform || s.category) === platform).forEach(s => types.add(s.type || 'other'));
-
-  const list = document.getElementById('types-list');
-  list.innerHTML = Array.from(types).map(t => {
-    const emoji = TYPE_EMOJIS[t] || '🔧';
-    const count = allServices.filter(s => (s.platform || s.category) === platform && (s.type || 'other') === t).length;
-    return `
-      <div class="service-item" onclick="showServices('${platform}', '${t}')" style="cursor:pointer;">
-        <div class="service-header">
-          <div>
-            <div class="service-name">${emoji} ${t.charAt(0).toUpperCase() + t.slice(1)}</div>
-            <div class="service-type">${count} options available</div>
-          </div>
-          <span style="color:#666;font-size:20px;">›</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-  window.scrollTo(0, 0);
+  document.querySelectorAll('.platform-chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.platform === platform);
+  });
+  renderPackages(platform);
 }
 
-function showServices(platform, type) {
-  currentType = type;
-  hideAllScreens();
-  document.getElementById('screen-services').classList.remove('hidden');
-  document.getElementById('services-title').textContent = `${PLATFORM_NAMES[platform] || platform} — ${type.charAt(0).toUpperCase() + t.slice(1)}`;
+function renderPackages(platform) {
+  const grid = document.getElementById('packages-grid');
+  const filtered = allServices.filter(s => (s.platform || s.category) === platform);
 
-  const filtered = allServices.filter(s => (s.platform || s.category) === platform && (s.type || 'other') === type);
-  const list = document.getElementById('services-list');
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:16px;opacity:0.3;">📭</div>
+        <div style="font-weight:700;margin-bottom:8px;">No packages available yet</div>
+        <div style="font-size:14px;">Please check back later or contact support.</div>
+      </div>
+    `;
+    return;
+  }
+
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
 
-  list.innerHTML = filtered.map((s, idx) => {
-    const options = s.options || [];
-    const optsHtml = options.map((o, oidx) => {
-      const price = Math.max(20, Math.ceil((o.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
-      const duration = o.deliveryMinutes < 60 ? `~${o.deliveryMinutes} min` : `~${Math.round(o.deliveryMinutes/60)} hrs`;
-      const speedLabel = o.deliveryMinutes <= 60 ? '⚡ Fast Delivery' : (o.deliveryMinutes <= 360 ? '🔥 Quick Delivery' : '💰 Best Value');
-      const speedColor = o.deliveryMinutes <= 60 ? '#ec4899' : (o.deliveryMinutes <= 360 ? '#8b5cf6' : '#34c759');
+  grid.innerHTML = filtered.map((s, idx) => {
+    const options = s.options?.length ? s.options : [{
+      rate: parseFloat(s.rate) || 1, min: parseInt(s.min) || 50, max: parseInt(s.max) || 10000,
+      deliveryMinutes: 240, refill: s.refill || false
+    }];
 
-      return `
-        <div class="option-btn" onclick="showOrderForm(${s.serviceId}, ${oidx})">
-          <div class="opt-left">
-            <span class="opt-speed" style="color:${speedColor}">${speedLabel}</span>
-            <span class="opt-meta">Min: ${o.min.toLocaleString()} | Max: ${o.max.toLocaleString()}</span>
-          </div>
-          <div class="opt-right">
-            <div class="opt-price">KES ${price}</div>
-            <div class="opt-duration">${duration}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    // Show the cheapest option as the card price
+    const bestOpt = options.sort((a, b) => a.rate - b.rate)[0];
+    const price = Math.max(20, Math.ceil((bestOpt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
+    const duration = bestOpt.deliveryMinutes < 60 ? `~${bestOpt.deliveryMinutes} min` : `~${Math.round(bestOpt.deliveryMinutes/60)} hrs`;
+    const speedTag = bestOpt.deliveryMinutes <= 60 ? 'Fast' : (bestOpt.deliveryMinutes <= 360 ? 'Quick' : 'Standard');
+    const typeLabel = TYPE_LABELS[s.type] || (s.type || 'Boost');
 
     return `
-      <div class="service-item">
-        <div class="service-header">
-          <div>
-            <div class="service-name">${idx+1}. ${s.displayName || s.name}</div>
-            <div class="service-type">${s.type || 'Service'}</div>
-          </div>
+      <div class="pkg-card">
+        <div class="pkg-tag">${speedTag}</div>
+        <h4>${s.displayName || s.name}</h4>
+        <div class="pkg-type">${PLATFORM_META[platform]?.name || platform} • ${typeLabel}</div>
+        <div class="pkg-meta">
+          <div class="pkg-meta-row"><span class="label">Min Quantity</span><span class="value">${bestOpt.min.toLocaleString()}</span></div>
+          <div class="pkg-meta-row"><span class="label">Max Quantity</span><span class="value">${bestOpt.max.toLocaleString()}</span></div>
+          <div class="pkg-meta-row"><span class="label">Delivery</span><span class="value" style="color:var(--warning);">${duration}</span></div>
+          <div class="pkg-meta-row"><span class="label">Refill</span><span class="value" style="color:${bestOpt.refill ? 'var(--success)' : 'var(--text-muted)'}">${bestOpt.refill ? '✅ 30 days' : '❌ No'}</span></div>
         </div>
-        <div class="options">${optsHtml}</div>
+        <div class="pkg-price">KES ${price}<span> / 500 qty</span></div>
+        <button onclick="openOrderModal(${s.serviceId}, 0)">Order Now</button>
       </div>
     `;
   }).join('');
-  window.scrollTo(0, 0);
 }
 
-function showOrderForm(serviceId, optionIdx) {
+// ==================== MODALS ====================
+function openOrderModal(serviceId, optionIdx) {
   const svc = allServices.find(s => s.serviceId === serviceId);
   if (!svc) return;
-  const opt = svc.options[optionIdx];
-  if (!opt) return;
+  const opt = (svc.options?.length ? svc.options : [{
+    rate: parseFloat(svc.rate) || 1, min: parseInt(svc.min) || 50, max: parseInt(svc.max) || 10000,
+    deliveryMinutes: 240, refill: svc.refill || false
+  }])[optionIdx];
 
   currentService = svc;
   currentOptionIdx = optionIdx;
 
-  hideAllScreens();
-  document.getElementById('screen-order').classList.remove('hidden');
-
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
   const price = Math.max(20, Math.ceil((opt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
   const duration = opt.deliveryMinutes < 60 ? `~${opt.deliveryMinutes} min` : `~${Math.round(opt.deliveryMinutes/60)} hrs`;
-  const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
+  const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast Delivery' : (opt.deliveryMinutes <= 360 ? '🔥 Quick Delivery' : '💰 Standard Delivery');
 
-  document.getElementById('order-service').textContent = svc.displayName || svc.name;
-  document.getElementById('order-speed').textContent = `${speedLabel} (${duration})`;
-  document.getElementById('order-limits').textContent = `${opt.min.toLocaleString()} - ${opt.max.toLocaleString()}`;
-  document.getElementById('order-price').textContent = `KES ${price} / 500 qty`;
+  document.getElementById('modal-title').textContent = svc.displayName || svc.name;
+  document.getElementById('modal-sub').textContent = `${PLATFORM_META[currentPlatform]?.name || currentPlatform} • ${TYPE_LABELS[svc.type] || svc.type || 'Service'}`;
+  document.getElementById('sum-service').textContent = svc.displayName || svc.name;
+  document.getElementById('sum-speed').textContent = `${speedLabel} (${duration})`;
+  document.getElementById('sum-range').textContent = `${opt.min.toLocaleString()} - ${opt.max.toLocaleString()}`;
+  document.getElementById('sum-price').textContent = `KES ${price}`;
+  document.getElementById('btn-price').textContent = price;
   document.getElementById('qty-hint').textContent = `Enter a value between ${opt.min.toLocaleString()} and ${opt.max.toLocaleString()}`;
-  window.scrollTo(0, 0);
+  document.getElementById('order-qty').placeholder = opt.min;
+
+  document.getElementById('order-modal').classList.add('active');
+  document.body.style.overflow = 'hidden';
 }
 
-function hideAllScreens() {
-  ['screen-platforms', 'screen-types', 'screen-services', 'screen-order', 'screen-status', 'screen-success'].forEach(id => {
-    document.getElementById(id).classList.add('hidden');
-  });
+function closeModal() {
+  document.getElementById('order-modal').classList.remove('active');
+  document.body.style.overflow = '';
 }
 
-// ==================== ORDER SUBMISSION ====================
+function closeStatusModal() {
+  document.getElementById('status-modal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function showTrackModal() {
+  document.getElementById('track-modal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTrackModal() {
+  document.getElementById('track-modal').classList.remove('active');
+  document.getElementById('track-result').innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+// ==================== ORDER LOGIC ====================
 async function submitOrder() {
   const link = document.getElementById('order-link').value.trim();
-  const qty = parseInt(document.getElementById('order-quantity').value);
+  const qty = parseInt(document.getElementById('order-qty').value);
   const phone = document.getElementById('order-phone').value.trim().replace(/\D/g, '');
   const name = document.getElementById('order-name').value.trim();
-  const opt = currentService.options[currentOptionIdx];
+  const opt = (currentService.options?.length ? currentService.options : [{
+    rate: parseFloat(currentService.rate) || 1, min: parseInt(currentService.min) || 50, max: parseInt(currentService.max) || 10000
+  }])[currentOptionIdx];
 
-  if (!link) { showToast('❌ Please enter a link'); return; }
-  if (!qty || isNaN(qty) || qty < opt.min || qty > opt.max) { 
-    showToast(`❌ Quantity must be between ${opt.min} and ${opt.max}`); 
-    return; 
+  if (!link) { showToast('Please enter a link', 'error'); return; }
+  if (!qty || isNaN(qty) || qty < opt.min || qty > opt.max) {
+    showToast(`Quantity must be between ${opt.min} and ${opt.max}`, 'error');
+    return;
   }
-  if (!phone || phone.length < 9) { showToast('❌ Please enter a valid phone number'); return; }
+  if (!phone || phone.length < 9) { showToast('Please enter a valid phone number', 'error'); return; }
 
-  const btn = document.getElementById('btn-pay');
+  const btn = document.getElementById('btn-submit');
   btn.disabled = true;
-  btn.textContent = '⏳ Processing...';
+  btn.innerHTML = '⏳ Processing...';
 
   try {
-    // Format phone
     let formattedPhone = phone;
     if (formattedPhone.startsWith('0')) formattedPhone = '254' + formattedPhone.slice(1);
     else if (!formattedPhone.startsWith('254')) formattedPhone = '254' + formattedPhone;
@@ -459,71 +766,117 @@ async function submitOrder() {
       })
     }).then(r => r.json());
 
-    if (!initRes.success) {
-      throw new Error(initRes.error || 'Failed to initialize order');
-    }
+    if (!initRes.success) throw new Error(initRes.error || 'Failed to initialize order');
 
     currentSessionId = initRes.sessionId;
     currentReference = initRes.reference;
 
-    // Trigger STK
     const payRes = await fetch(`${API_BASE}/api/web/pay/stk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: currentSessionId, reference: currentReference })
     }).then(r => r.json());
 
-    if (!payRes.success) {
-      throw new Error(payRes.error || 'Payment initiation failed');
-    }
+    if (!payRes.success) throw new Error(payRes.error || 'Payment initiation failed');
 
-    hideAllScreens();
-    document.getElementById('screen-status').classList.remove('hidden');
+    closeModal();
+    document.getElementById('status-icon').textContent = '⏳';
+    document.getElementById('status-title').textContent = 'Processing Payment';
+    document.getElementById('status-text').textContent = 'Check your phone for the M-Pesa prompt and enter your PIN to complete.';
+    document.getElementById('status-ref').textContent = currentReference;
+    document.getElementById('status-modal').classList.add('active');
     showToast('📲 STK push sent! Check your phone.');
 
-    // Auto-check after 30s
     setTimeout(checkOrderStatus, 30000);
 
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showToast(err.message, 'error');
     btn.disabled = false;
-    btn.textContent = '💳 PROCEED TO PAY';
+    btn.innerHTML = '💳 PROCEED TO PAY — KES <span id="btn-price">0</span>';
   }
 }
 
 async function checkOrderStatus() {
   if (!currentReference) return;
-
   try {
     const res = await fetch(`${API_BASE}/api/web/order/status?reference=${currentReference}`).then(r => r.json());
-
     if (res.status === 'completed' || res.orderStatus === 'Completed' || res.orderStatus === 'processing') {
-      hideAllScreens();
-      document.getElementById('screen-success').classList.remove('hidden');
-      document.getElementById('success-ref').textContent = currentReference;
-      showToast('🎉 Payment confirmed!');
+      document.getElementById('status-icon').textContent = '🎉';
+      document.getElementById('status-title').textContent = 'Payment Successful!';
+      document.getElementById('status-text').textContent = 'Your order has been placed and is now being processed.';
+      showToast('Payment confirmed!', 'success');
     } else if (res.status === 'failed') {
-      document.querySelector('#status-card .status-icon').textContent = '❌';
-      document.querySelector('#status-card .status-title').textContent = 'Payment Failed';
-      document.querySelector('#status-card .status-text').textContent = 'The payment was not completed. Please try again.';
+      document.getElementById('status-icon').textContent = '❌';
+      document.getElementById('status-title').textContent = 'Payment Failed';
+      document.getElementById('status-text').textContent = 'The payment was not completed. Please try again.';
+      showToast('Payment failed', 'error');
     } else {
-      showToast('⏳ Still processing... Check again in a moment.');
+      showToast('Still processing... Check again shortly.');
     }
   } catch (e) {
-    showToast('❌ Status check failed');
+    showToast('Status check failed', 'error');
+  }
+}
+
+async function trackOrder() {
+  const ref = document.getElementById('track-ref').value.trim();
+  if (!ref) { showToast('Enter a reference number', 'error'); return; }
+
+  const resultDiv = document.getElementById('track-result');
+  resultDiv.innerHTML = '<div style="color:var(--text-muted);text-align:center;">Checking...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/web/order/status?reference=${ref}`).then(r => r.json());
+    const statusColor = res.status === 'completed' ? 'var(--success)' : (res.status === 'failed' ? 'var(--danger)' : 'var(--warning)');
+    resultDiv.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+          <span style="color:var(--text-muted);font-size:13px;">Reference</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:13px;">${ref}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+          <span style="color:var(--text-muted);font-size:13px;">Payment Status</span>
+          <span style="font-weight:700;color:${statusColor};font-size:13px;">${res.status || 'pending'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-muted);font-size:13px;">Order Status</span>
+          <span style="font-weight:700;color:${res.orderStatus === 'Completed' ? 'var(--success)' : 'var(--primary)'};font-size:13px;">${res.orderStatus || 'pending'}</span>
+        </div>
+        ${res.smmOrderId ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);">Provider Order ID: <span style="font-family:'JetBrains Mono',monospace;">${res.smmOrderId}</span></div>` : ''}
+      </div>
+    `;
+  } catch (e) {
+    resultDiv.innerHTML = '<div style="color:var(--danger);text-align:center;">Order not found or error occurred.</div>';
   }
 }
 
 // ==================== UTILS ====================
-function showToast(msg) {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  const div = document.createElement('div');
-  div.className = 'toast';
-  div.innerHTML = `<span>${msg.includes('✅') || msg.includes('🎉') ? '✓' : 'ℹ️'}</span> ${msg.replace(/[✅❌🎉📲⏳]/g, '').trim()}`;
-  document.body.appendChild(div);
-  setTimeout(() => div.remove(), 3000);
+function scrollToPackages() {
+  document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
+function scrollToHow() {
+  document.getElementById('how-it-works').scrollIntoView({ behavior: 'smooth' });
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  const icon = document.getElementById('toast-icon');
+  const text = document.getElementById('toast-msg');
+  icon.textContent = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ️';
+  text.textContent = msg;
+  toast.className = `toast ${type} show`;
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  });
+});
 
 // Start
 init();

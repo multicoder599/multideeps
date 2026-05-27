@@ -381,7 +381,7 @@ function getTypeKeyboard(services, platform) {
         followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧'
     };
     for (const t of typeList) {
-        keyboard.text(`${typeEmojis[t] || '🔧'} ${t.charAt(0).toUpperCase() + t.slice(1)}`, `type_${platform}_${t}`).row();
+        keyboard.text(`${typeEmojis[t] || '🔧'} ${t.charAt(0).toUpperCase() + type.slice(1)}`, `type_${platform}_${t}`).row();
     }
     keyboard.text('🔙 Back to Platforms', 'back_platforms');
     return keyboard;
@@ -932,11 +932,27 @@ bot.on('callback_query:data', async (ctx) => {
         const displayName = svc.displayName || cleanServiceName(svc);
         const options = svc.options || [];
 
+        // If no options (old data or single provider), create a default option
+        let effectiveOptions = options;
+        if (options.length === 0) {
+            effectiveOptions = [{
+                provider: 'smmfollows',
+                providerServiceId: svc.serviceId,
+                rate: parseFloat(svc.rate) || 1,
+                min: parseInt(svc.min) || 50,
+                max: parseInt(svc.max) || 10000,
+                refill: svc.refill || false,
+                cancel: svc.cancel || false,
+                deliveryMinutes: estimateDeliveryMinutes(svc.name, svc.category),
+                reliabilityScore: 100
+            }];
+        }
+
         // Build option list with pricing and delivery estimates
         let text = `🛒 *${escapeMarkdown(displayName)}*\n\n`;
         text += `Choose your preferred speed & price:\n\n`;
 
-        options.forEach((opt, idx) => {
+        effectiveOptions.forEach((opt, idx) => {
             const price = getTierDisplayPrice(opt.rate, (tiers[0]?.maxQty || 500), cfg);
             const duration = formatDuration(opt.deliveryMinutes);
             const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
@@ -967,7 +983,21 @@ bot.on('callback_query:data', async (ctx) => {
         const svc = await Service.findOne({ serviceId });
         if (!svc) return ctx.reply("❌ Service not found.");
 
-        const options = svc.options || [];
+        let options = svc.options || [];
+        // Fallback for old data
+        if (options.length === 0) {
+            options = [{
+                provider: 'smmfollows',
+                providerServiceId: svc.serviceId,
+                rate: parseFloat(svc.rate) || 1,
+                min: parseInt(svc.min) || 50,
+                max: parseInt(svc.max) || 10000,
+                refill: svc.refill || false,
+                cancel: svc.cancel || false,
+                deliveryMinutes: estimateDeliveryMinutes(svc.name, svc.category),
+                reliabilityScore: 100
+            }];
+        }
         const selectedOpt = options[optionIdx];
         if (!selectedOpt) return ctx.reply("❌ Option not found.");
 
@@ -1950,7 +1980,13 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Admin route — only accessible via Telegram Mini App (has init data)
 app.get('/admin', (req, res) => {
+    const initData = req.headers['x-telegram-init-data'];
+    // If no init data and not already in Telegram WebApp context, redirect to home
+    if (!initData && !req.query._tg_webapp) {
+        return res.redirect('/');
+    }
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
