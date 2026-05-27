@@ -1240,35 +1240,83 @@ bot.on('message:text', async (ctx) => {
     }
 
     if (customerState) {
-        if (customerState.action === 'awaiting_qty_for_option') {
-            const qty = parseInt(ctx.message.text.trim().replace(/,/g, ''));
-            const { serviceId, optionIdx, provider, providerServiceId, serviceName, rate, min, max, deliveryMinutes, refill } = customerState.data;
-            const svcMin = parseInt(min) || 100;
-            const svcMax = parseInt(max) || 100000;
+        console.log(`[CUSTOMER] Processing state: ${customerState.action} for user ${ctx.from.id}`);
 
-            if (isNaN(qty) || qty < svcMin || qty > svcMax) {
+        // === QUANTITY INPUT ===
+        if (customerState.action === 'awaiting_qty_in_tier') {
+            const rawText = ctx.message.text.trim().replace(/,/g, '');
+            const qty = parseInt(rawText);
+            const tier = customerState.data?.tier;
+            const min = parseInt(customerState.data?.min) || 50;
+            const max = parseInt(customerState.data?.max) || 100000;
+
+            console.log(`[QTY] raw="${rawText}" qty=${qty} tier=${JSON.stringify(tier)} min=${min} max=${max}`);
+
+            const tierMin = parseInt(tier?.minQty) || 50;
+            const tierMax = parseInt(tier?.maxQty) || 500;
+
+            if (isNaN(qty) || qty < tierMin || qty > tierMax || qty < min || qty > max) {
                 await ctx.reply(
                     `❌ Invalid quantity.\n\n` +
-                    `• Service limits: ${svcMin.toLocaleString()} - ${svcMax.toLocaleString()}\n\nPlease enter a valid quantity:`,
+                    `• Tier range: *${tierMin.toLocaleString()} - ${tierMax.toLocaleString()}*\n` +
+                    `• Service limits: ${min} - ${max}\n\nPlease enter a valid quantity:`,
                     { parse_mode: "Markdown" }
                 );
                 return;
             }
 
             const cfg = store.pricingConfig || {};
+            const tierMultiplier = parseFloat(tier?.multiplier) || 1.0;
+            const rate = parseFloat(customerState.data?.rate) || 1;
             const basePrice = calculateKESPrice(rate, qty, cfg);
-            const adjustedPrice = Math.max(20, Math.ceil(basePrice / 10) * 10);
+            const adjustedPrice = Math.max(20, Math.ceil(basePrice * tierMultiplier / 10) * 10);
 
             customerState.data.quantity = qty;
             customerState.data.price = adjustedPrice;
-            customerState.action = 'awaiting_link';
 
-            const duration = formatDuration(deliveryMinutes);
+            console.log(`[QTY] Success! qty=${qty} price=${adjustedPrice}`);
+
+            // Check for multiple provider options
+            const options = customerState.data?.options || [];
+            const effectiveOptions = options.length > 1 ? options : [{
+                provider: 'smmfollows', providerServiceId: customerState.data.serviceId,
+                rate, min, max, refill: false, deliveryMinutes: 240, reliabilityScore: 100
+            }];
+
+            if (effectiveOptions.length > 1) {
+                customerState.data.options = effectiveOptions;
+                customerState.action = 'awaiting_provider_choice';
+
+                let text = `📋 *Choose Delivery Speed*\n\n`;
+                text += `Quantity: *${qty.toLocaleString()}*\n`;
+                text += `Base Price: *KES ${adjustedPrice}*\n\n`;
+                text += `Select your preferred option:\n`;
+
+                const keyboard = new InlineKeyboard();
+                effectiveOptions.forEach((opt, idx) => {
+                    const optPrice = Math.max(20, Math.ceil(calculateKESPrice(opt.rate, qty, cfg) * tierMultiplier / 10) * 10);
+                    const duration = formatDuration(opt.deliveryMinutes);
+                    const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
+
+                    text += `${idx+1}. ${speedLabel}\n`;
+                    text += `   KES ${optPrice} | ${duration}\n`;
+                    text += `   ${opt.provider === 'peaker' ? 'Premium' : 'Standard'} provider\n\n`;
+
+                    keyboard.text(btnText(`${speedLabel} | KES ${optPrice} | ${duration}`), `provider_${idx}`).row();
+                });
+                keyboard.text('🔙 Cancel', 'back_start');
+
+                await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
+                return;
+            }
+
+            // Single provider
+            customerState.data.selectedProvider = effectiveOptions[0];
+            customerState.action = 'awaiting_link';
 
             await ctx.reply(
                 `✅ *Quantity: ${qty.toLocaleString()}*\n` +
-                `💰 *Price: KES ${adjustedPrice}*\n` +
-                `⏱️ *Delivery: ${duration}*\n\n` +
+                `💰 *Price: KES ${adjustedPrice}*\n\n` +
                 `Now send the link or username to promote:\n` +
                 `_Examples:_\n` +
                 `• Instagram: \`https://instagram.com/username\`\n` +
@@ -1280,21 +1328,27 @@ bot.on('message:text', async (ctx) => {
             return;
         }
 
+        // === PROVIDER CHOICE ===
+        if (customerState.action === 'awaiting_provider_choice') {
+            await ctx.reply("⚠️ Please select a delivery speed option from the buttons above.");
+            return;
+        }
+
+        // === LINK INPUT ===
         if (customerState.action === 'awaiting_link') {
             customerState.data.link = ctx.message.text.trim();
             customerState.action = 'awaiting_payment_confirm';
-            const { serviceName, quantity, price, link, deliveryMinutes, refill } = customerState.data;
-            const duration = formatDuration(deliveryMinutes);
+            const { serviceName, quantity, price, selectedProvider } = customerState.data;
+            const duration = selectedProvider ? formatDuration(selectedProvider.deliveryMinutes) : '~2-12 hrs';
 
             await ctx.reply(
                 `📋 *ORDER SUMMARY*\n\n` +
                 `🛒 Service: ${escapeMarkdown(serviceName)}\n` +
-                `🔗 Link: ${escapeMarkdown(link)}\n` +
+                `🔗 Link: ${escapeMarkdown(customerState.data.link)}\n` +
                 `📊 Quantity: ${quantity.toLocaleString()}\n` +
                 `💰 Total: *KES ${price}*\n` +
                 `⏱️ Delivery: *${duration}*\n\n` +
-                `${refill ? '🔄 *Refill guarantee included*\n\n' : ''}` +
-                `⏳ *Delivery Notice:* Orders typically start within minutes. Delivery time depends on quantity and platform load.\n\n` +
+                `⏳ *Delivery Notice:* Orders typically start within minutes.\n\n` +
                 `Tap *PROCEED TO PAY* to continue 👇`,
                 {
                     parse_mode: "Markdown",
@@ -1306,11 +1360,15 @@ bot.on('message:text', async (ctx) => {
             return;
         }
 
+        // === PHONE INPUT ===
         if (customerState.action === 'awaiting_payment_phone') {
             let phone = ctx.message.text.trim().replace(/\D/g, '');
             if (phone.startsWith('0')) phone = '254' + phone.slice(1);
             else if (!phone.startsWith('254')) phone = '254' + phone;
-            if (phone.length !== 12) { await ctx.reply("❌ Invalid phone. Use format: 07XXXXXXXX"); return; }
+            if (phone.length !== 12) { 
+                await ctx.reply("❌ Invalid phone. Use format: 07XXXXXXXX"); 
+                return; 
+            }
 
             const { serviceId, selectedProvider, serviceName, link, quantity, price } = customerState.data;
             const provider = selectedProvider?.provider || 'smmfollows';
@@ -1371,7 +1429,7 @@ bot.on('message:text', async (ctx) => {
             }
             return;
         }
-    }
+    }    }
 });
 
 // ==========================================
