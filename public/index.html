@@ -486,8 +486,28 @@
   .status-screen .ref {
     font-family: 'JetBrains Mono', monospace; font-size: 13px;
     background: var(--bg-card); padding: 10px 16px; border-radius: 8px;
-    display: inline-block; margin-bottom: 24px; border: 1px solid var(--border);
-    color: var(--primary-light);
+    display: inline-flex; align-items: center; gap: 10px; margin-bottom: 24px;
+    border: 1.5px solid var(--border);
+    color: var(--primary-light); cursor: pointer; user-select: all;
+    transition: all 0.2s; position: relative;
+  }
+  .status-screen .ref:hover {
+    border-color: var(--primary);
+    background: rgba(6,182,212,0.08);
+  }
+  .status-screen .ref .copy-btn {
+    background: var(--gradient); color: #fff; border: none;
+    padding: 4px 10px; border-radius: 6px; font-size: 11px;
+    font-weight: 700; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .status-screen .ref .copy-btn.copied {
+    background: var(--success);
+  }
+  .status-screen .ref-hint {
+    font-size: 12px; color: var(--text-muted); margin-bottom: 12px;
+    font-weight: 500;
   }
 
   /* Toast */
@@ -569,6 +589,7 @@
     .step-card { padding: 20px; }
   }
 </style>
+<base target="_blank">
 <base target="_blank">
 <base target="_blank">
 </head>
@@ -771,7 +792,7 @@
       <div class="icon" id="status-icon">schedule</div>
       <h3 id="status-title">Processing Payment</h3>
       <p id="status-text">Check your phone for the M-Pesa prompt and enter your PIN to complete.</p>
-      <div class="ref" id="status-ref">-</div>
+      <div class="ref-hint">👇 Tap the reference number or button to copy it for tracking</div><div class="ref" id="status-ref" onclick="copyRef()">-<button class="copy-btn" id="copy-btn"><span class="material-symbols-outlined" style="font-size:14px;">content_copy</span> Copy</button></div>
       <button class="btn-block" onclick="checkOrderStatus()">
         <span class="material-symbols-outlined">refresh</span>
         Check Status
@@ -947,7 +968,17 @@ function renderPackages(platform) {
     }];
 
     const bestOpt = options.sort((a, b) => a.rate - b.rate)[0];
-    const price = Math.max(20, Math.ceil((bestOpt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
+    // Calculate price per 500 with correct tier multiplier
+    const basePricePer500 = (bestOpt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500;
+    let tierMultiplier = 1.0;
+    const tiers = cfg?.tiers || [];
+    for (const tier of tiers) {
+      if (500 >= tier.minQty && 500 <= tier.maxQty) {
+        tierMultiplier = parseFloat(tier.multiplier) || 1.0;
+        break;
+      }
+    }
+    const price = Math.max(20, Math.ceil((basePricePer500 * tierMultiplier) / 10) * 10);
     const duration = bestOpt.deliveryMinutes < 60 ? `~${bestOpt.deliveryMinutes} min` : `~${Math.round(bestOpt.deliveryMinutes/60)} hrs`;
     const speedTag = bestOpt.deliveryMinutes <= 60 ? 'Fast' : (bestOpt.deliveryMinutes <= 360 ? 'Quick' : 'Standard');
     const typeLabel = TYPE_LABELS[s.type] || (s.type || 'Boost');
@@ -1020,7 +1051,19 @@ function calculatePrice(rate, quantity, cfg) {
   const markup = cfg?.markupMultiplier || 1.5;
   const costPer1k = r * exchangeRate;
   const pricePer1k = costPer1k * markup;
-  const total = (pricePer1k / 1000) * quantity;
+  let total = (pricePer1k / 1000) * quantity;
+
+  // Apply tier multiplier based on quantity (same as bot)
+  const tiers = cfg?.tiers || [];
+  let tierMultiplier = 1.0;
+  for (const tier of tiers) {
+    if (quantity >= tier.minQty && quantity <= tier.maxQty) {
+      tierMultiplier = parseFloat(tier.multiplier) || 1.0;
+      break;
+    }
+  }
+  total = total * tierMultiplier;
+
   return Math.max(20, Math.ceil(total / 10) * 10);
 }
 
@@ -1035,13 +1078,28 @@ function updateDynamicPrice() {
   }
   const qty = parseInt(qtyInput.value);
   if (isNaN(qty) || qty < opt.min || qty > opt.max) {
-    btnPrice.textContent = '&mdash;';
+    btnPrice.textContent = '—';
     return;
   }
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
   const price = calculatePrice(opt.rate, qty, cfg);
+
+  // Show which tier is active
+  const tiers = cfg?.tiers || [];
+  let activeTier = null;
+  for (const tier of tiers) {
+    if (qty >= tier.minQty && qty <= tier.maxQty) {
+      activeTier = tier;
+      break;
+    }
+  }
+
   btnPrice.textContent = price;
-  sumPrice.textContent = `KES ${price} for ${qty.toLocaleString()} qty`;
+  let priceText = `KES ${price} for ${qty.toLocaleString()} qty`;
+  if (activeTier) {
+    priceText += ` (${activeTier.label})`;
+  }
+  sumPrice.textContent = priceText;
 }
 
 function closeModal() {
@@ -1189,6 +1247,40 @@ async function trackOrder() {
 }
 
 // ==================== UTILS ====================
+function copyRef() {
+  const ref = document.getElementById('status-ref');
+  const btn = document.getElementById('copy-btn');
+  const text = ref.childNodes[0].textContent.trim();
+  if (!text || text === '-') return;
+
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">check</span> Copied!';
+      btn.classList.add('copied');
+      showToast('Reference copied! Save it for tracking.', 'success');
+      setTimeout(() => {
+        btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">content_copy</span> Copy';
+        btn.classList.remove('copied');
+      }, 2500);
+    });
+  } else {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">check</span> Copied!';
+    btn.classList.add('copied');
+    showToast('Reference copied! Save it for tracking.', 'success');
+    setTimeout(() => {
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">content_copy</span> Copy';
+      btn.classList.remove('copied');
+    }, 2500);
+  }
+}
+
 function scrollToPackages() {
   document.getElementById('packages').scrollIntoView({ behavior: 'smooth' });
 }
