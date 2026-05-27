@@ -3,7 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
-const { Bot, InlineKeyboard, Keyboard } = require('grammy');
+const { Bot, InlineKeyboard, Keyboard, InputFile } = require('grammy');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -527,16 +527,25 @@ async function showCustomerMenu(ctx) {
 
     const welcomeText = store.welcomeMessage || "Welcome! Boost your social media presence. Choose a platform to get started:";
 
-    // Only send photo if we have a valid-looking image URL
-    const photoUrl = store.welcomePhoto;
-    const hasValidPhoto = photoUrl && (photoUrl.endsWith('.jpg') || photoUrl.endsWith('.jpeg') || photoUrl.endsWith('.png') || photoUrl.endsWith('.webp') || photoUrl.endsWith('.gif'));
-
-    if (hasValidPhoto) {
+    // Try sending photo from local filesystem first (more reliable than URL)
+    const photoUrl = store.welcomePhoto || '';
+    if (photoUrl) {
+        const filename = photoUrl.split('/').pop();
+        const localPath = path.join(__dirname, 'public', 'uploads', filename);
+        try {
+            if (fs.existsSync(localPath)) {
+                await ctx.replyWithPhoto(new InputFile(localPath), { caption: welcomeText, reply_markup: keyboard });
+                return;
+            }
+        } catch (err) {
+            console.log('[showCustomerMenu] Local photo failed:', err.message, '| Path:', localPath);
+        }
+        // Fallback to URL
         try {
             await ctx.replyWithPhoto(photoUrl, { caption: welcomeText, reply_markup: keyboard });
             return;
         } catch (err) {
-            console.log('[showCustomerMenu] Photo send failed:', err.message, '| URL:', photoUrl);
+            console.log('[showCustomerMenu] URL photo failed:', err.message, '| URL:', photoUrl);
         }
     }
 
@@ -570,10 +579,23 @@ Manage your store, view orders, and configure services below.`;
     // Send welcome with main menu keyboard
     const store = await getDefaultStore();
     const welcomeText = store?.welcomeMessage || "🚀 *Welcome to Multi Social Deeps!*\n\nBoost your social media presence with real engagement.\n\nChoose an option below or tap 💎 Plans to browse services.";
-    const photoUrl = store?.welcomePhoto;
-    const hasValidPhoto = photoUrl && (photoUrl.endsWith('.jpg') || photoUrl.endsWith('.jpeg') || photoUrl.endsWith('.png') || photoUrl.endsWith('.webp') || photoUrl.endsWith('.gif'));
+    const photoUrl = store?.welcomePhoto || '';
 
-    if (hasValidPhoto) {
+    if (photoUrl) {
+        const filename = photoUrl.split('/').pop();
+        const localPath = path.join(__dirname, 'public', 'uploads', filename);
+        try {
+            if (fs.existsSync(localPath)) {
+                await ctx.replyWithPhoto(new InputFile(localPath), { 
+                    caption: welcomeText, 
+                    parse_mode: "Markdown",
+                    reply_markup: getMainMenuKeyboard()
+                });
+                return;
+            }
+        } catch (e) {
+            console.log('[handleStart] Local photo failed:', e.message);
+        }
         try {
             await ctx.replyWithPhoto(photoUrl, { 
                 caption: welcomeText, 
@@ -582,7 +604,7 @@ Manage your store, view orders, and configure services below.`;
             });
             return;
         } catch (e) {
-            console.log('[handleStart] Photo send failed:', e.message, '| URL:', photoUrl);
+            console.log('[handleStart] URL photo failed:', e.message);
         }
     }
     await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
@@ -1147,6 +1169,8 @@ bot.on('message:text', async (ctx) => {
     const state = adminUserState.get(ctx.from.id);
     const customerState = customerPendingInputs.get(ctx.from.id);
     const store = await getDefaultStore();
+
+    console.log(`[TEXT] User ${ctx.from.id} state:`, customerState?.action || 'none', 'Text:', ctx.message.text.substring(0, 30));
 
     if (state && ADMIN_IDS.includes(ctx.from.id)) {
         const text = ctx.message.text.trim();
