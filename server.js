@@ -536,7 +536,7 @@ async function showCustomerMenu(ctx) {
             await ctx.replyWithPhoto(photoUrl, { caption: welcomeText, reply_markup: keyboard });
             return;
         } catch (err) {
-            console.log('[showCustomerMenu] Photo unavailable, falling back to text');
+            console.log('[showCustomerMenu] Photo send failed:', err.message, '| URL:', photoUrl);
         }
     }
 
@@ -582,7 +582,7 @@ Manage your store, view orders, and configure services below.`;
             });
             return;
         } catch (e) {
-            console.log('[handleStart] Photo unavailable, using text');
+            console.log('[handleStart] Photo send failed:', e.message, '| URL:', photoUrl);
         }
     }
     await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
@@ -1059,6 +1059,55 @@ bot.on('callback_query:data', async (ctx) => {
             `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected\n\n` +
             `Estimated delivery: *${duration}*\n\n` +
             `Enter exact quantity between *${selectedOpt.min.toLocaleString()}* and *${selectedOpt.max.toLocaleString()}*\n\n` +
+            `_Price for ${tier.maxQty.toLocaleString()} qty = KES ${priceForMax}_\n` +
+            `_Price scales proportionally with quantity_`,
+            { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+        );
+        return;
+    }
+
+    if (data.startsWith('tier_')) {
+        const match = data.match(/tier_(\d+)_(\d+)/);
+        if (!match) return;
+        const serviceId = parseInt(match[1]);
+        const tierIdx = parseInt(match[2]);
+        const svc = await Service.findOne({ serviceId });
+        if (!svc) return ctx.reply("❌ Service not found.");
+
+        const cfg = store.pricingConfig || {};
+        const tiers = cfg.tiers || [];
+        const tier = tiers[tierIdx];
+        if (!tier) return ctx.reply("❌ Tier not found.");
+
+        const displayName = svc.displayName || cleanServiceName(svc);
+
+        // Get rate from options or fallback
+        const options = svc.options || [];
+        let effectiveRate = parseFloat(svc.rate) || 1;
+        let effectiveMin = parseInt(svc.min) || 50;
+        let effectiveMax = parseInt(svc.max) || 10000;
+
+        if (options.length > 0) {
+            const bestOpt = options.sort((a,b) => a.rate - b.rate)[0];
+            effectiveRate = bestOpt.rate;
+            effectiveMin = bestOpt.min;
+            effectiveMax = bestOpt.max;
+        }
+
+        customerPendingInputs.set(userId, {
+            action: 'awaiting_qty_in_tier',
+            data: { 
+                serviceId, tier, serviceName: displayName, 
+                platform: detectPlatform(svc), type: detectType(svc), 
+                rate: effectiveRate, min: effectiveMin, max: effectiveMax,
+                options: options
+            }
+        });
+
+        const priceForMax = getTierDisplayPrice(effectiveRate, tier.maxQty, cfg);
+        await ctx.reply(
+            `${tier.label} selected ✅\n\n` +
+            `Enter exact quantity between *${tier.minQty.toLocaleString()}* and *${tier.maxQty.toLocaleString()}*\n\n` +
             `_Price for ${tier.maxQty.toLocaleString()} qty = KES ${priceForMax}_\n` +
             `_Price scales proportionally with quantity_`,
             { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
@@ -1599,9 +1648,16 @@ app.post('/api/services/sync', validateInitData, async (req, res) => {
         const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
         const actions = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
 
-        // Fetch from both APIs
+        // Fetch from both APIs (Peaker is optional)
         const smmServices = await fetchProviderServices(SMM_API_URL, SMM_API_KEY, 'smmfollows');
-        const peakerServices = PEAKER_API_KEY ? await fetchProviderServices(PEAKER_API_URL, PEAKER_API_KEY, 'peaker') : [];
+        let peakerServices = [];
+        if (PEAKER_API_KEY && PEAKER_API_KEY.length > 5) {
+            try {
+                peakerServices = await fetchProviderServices(PEAKER_API_URL, PEAKER_API_KEY, 'peaker');
+            } catch (e) {
+                console.log('[SYNC] Peaker API skipped:', e.message);
+            }
+        }
 
         const allRaw = [...smmServices, ...peakerServices];
 
