@@ -1009,16 +1009,38 @@ bot.on('callback_query:data', async (ctx) => {
         const selectedOpt = options[idx];
         if (!selectedOpt) return ctx.reply("❌ Option not found.");
 
+        // Recalculate price with selected provider's rate
+        const cfg = store.pricingConfig || {};
+        const qty = state.data.quantity;
+        const tierMultiplier = state.data.tierMultiplier || 1.0;
+        const exchangeRate = cfg?.exchangeRate || 130;
+        const markup = cfg?.markupMultiplier || 1.5;
+        const rawTotal = ((selectedOpt.rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
+        const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
+
         state.data.selectedProvider = selectedOpt;
+        state.data.price = adjustedPrice;
         state.action = 'awaiting_link';
 
         await ctx.reply(
-            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected\n\n` +
-            `Now send the link or username to promote:\n` +
-            `_Examples:_\n` +
-            `• Instagram: \`https://instagram.com/username\`\n` +
-            `• TikTok: \`https://tiktok.com/@username\`\n` +
-            `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
+            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected
+
+` +
+            `📊 Quantity: *${qty.toLocaleString()}*
+` +
+            `💰 Price: *KES ${adjustedPrice}*
+
+` +
+            `Now send the link or username to promote:
+` +
+            `_Examples:_
+` +
+            `• Instagram: \`https://instagram.com/username\`
+` +
+            `• TikTok: \`https://tiktok.com/@username\`
+` +
+            `• YouTube: \`https://youtube.com/watch?v=xxx\`
+` +
             `• Telegram: \`https://t.me/channelname\``,
             { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
         );
@@ -1070,7 +1092,8 @@ bot.on('callback_query:data', async (ctx) => {
                 min: selectedOpt.min, 
                 max: selectedOpt.max,
                 deliveryMinutes: selectedOpt.deliveryMinutes,
-                refill: selectedOpt.refill
+                refill: selectedOpt.refill,
+                tierMultiplier: 1.0
             }
         });
 
@@ -1250,16 +1273,21 @@ bot.on('message:text', async (ctx) => {
             const min = parseInt(customerState.data?.min) || 50;
             const max = parseInt(customerState.data?.max) || 100000;
 
-            console.log(`[QTY] raw="${rawText}" qty=${qty} tier=${JSON.stringify(tier)} min=${min} max=${max}`);
+            console.log(`[QTY-TIER] raw="${rawText}" qty=${qty} tier=${JSON.stringify(tier)} min=${min} max=${max}`);
 
             const tierMin = parseInt(tier?.minQty) || 50;
             const tierMax = parseInt(tier?.maxQty) || 500;
 
             if (isNaN(qty) || qty < tierMin || qty > tierMax || qty < min || qty > max) {
                 await ctx.reply(
-                    `❌ Invalid quantity.\n\n` +
-                    `• Tier range: *${tierMin.toLocaleString()} - ${tierMax.toLocaleString()}*\n` +
-                    `• Service limits: ${min} - ${max}\n\nPlease enter a valid quantity:`,
+                    `❌ Invalid quantity.
+
+` +
+                    `• Tier range: *${tierMin.toLocaleString()} - ${tierMax.toLocaleString()}*
+` +
+                    `• Service limits: ${min} - ${max}
+
+Please enter a valid quantity:`,
                     { parse_mode: "Markdown" }
                 );
                 return;
@@ -1268,22 +1296,31 @@ bot.on('message:text', async (ctx) => {
             const cfg = store.pricingConfig || {};
             const tierMultiplier = parseFloat(tier?.multiplier) || 1.0;
             const rate = parseFloat(customerState.data?.rate) || 1;
-            const basePrice = calculateKESPrice(rate, qty, cfg);
-            const adjustedPrice = Math.max(20, Math.ceil(basePrice * tierMultiplier / 10) * 10);
+
+            // Unified pricing formula (same as website)
+            const exchangeRate = cfg?.exchangeRate || 130;
+            const markup = cfg?.markupMultiplier || 1.5;
+            const rawTotal = ((rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
+            const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
 
             customerState.data.quantity = qty;
             customerState.data.price = adjustedPrice;
+            customerState.data.tierMultiplier = tierMultiplier;
 
-            console.log(`[QTY] Success! qty=${qty} price=${adjustedPrice}`);
+            console.log(`[QTY-TIER] Success! qty=${qty} price=${adjustedPrice} tier=${tier?.label}`);
 
-            // Check for multiple provider options
+            // Look up the actual Service document to resolve providerServiceId
+            const svcDoc = await Service.findOne({ serviceId: customerState.data.serviceId });
             const options = customerState.data?.options || [];
-            // For old pre-sync data, serviceId WAS the SMM provider ID
-            // For new synced data (serviceId >= 1000), we must get providerServiceId from svc.options
+
+            // Resolve providerServiceId properly
             let fallbackProviderId = customerState.data.serviceId;
-            if (svc && svc.options && svc.options.length > 0) {
-                fallbackProviderId = svc.options[0].providerServiceId;
+            if (svcDoc && svcDoc.options && svcDoc.options.length > 0) {
+                fallbackProviderId = svcDoc.options[0].providerServiceId;
+            } else if (svcDoc && svcDoc.serviceId < 1000) {
+                fallbackProviderId = svcDoc.serviceId; // legacy
             }
+
             const effectiveOptions = options.length > 1 ? options : [{
                 provider: 'smmfollows', providerServiceId: fallbackProviderId,
                 rate, min, max, refill: false, deliveryMinutes: 240, reliabilityScore: 100
@@ -1293,20 +1330,31 @@ bot.on('message:text', async (ctx) => {
                 customerState.data.options = effectiveOptions;
                 customerState.action = 'awaiting_provider_choice';
 
-                let text = `📋 *Choose Delivery Speed*\n\n`;
-                text += `Quantity: *${qty.toLocaleString()}*\n`;
-                text += `Base Price: *KES ${adjustedPrice}*\n\n`;
-                text += `Select your preferred option:\n`;
+                let text = `📋 *Choose Delivery Speed*
+
+`;
+                text += `Quantity: *${qty.toLocaleString()}*
+`;
+                text += `Price: *KES ${adjustedPrice}*
+
+`;
+                text += `Select your preferred option:
+`;
 
                 const keyboard = new InlineKeyboard();
                 effectiveOptions.forEach((opt, idx) => {
-                    const optPrice = Math.max(20, Math.ceil(calculateKESPrice(opt.rate, qty, cfg) * tierMultiplier / 10) * 10);
+                    const optRawTotal = ((opt.rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
+                    const optPrice = Math.max(20, Math.ceil(optRawTotal / 10) * 10);
                     const duration = formatDuration(opt.deliveryMinutes);
                     const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
 
-                    text += `${idx+1}. ${speedLabel}\n`;
-                    text += `   KES ${optPrice} | ${duration}\n`;
-                    text += `   ${opt.provider === 'peaker' ? 'Premium' : 'Standard'} provider\n\n`;
+                    text += `${idx+1}. ${speedLabel}
+`;
+                    text += `   KES ${optPrice} | ${duration}
+`;
+                    text += `   ${opt.provider === 'peaker' ? 'Premium' : 'Standard'} provider
+
+`;
 
                     keyboard.text(btnText(`${speedLabel} | KES ${optPrice} | ${duration}`), `provider_${idx}`).row();
                 });
@@ -1321,20 +1369,91 @@ bot.on('message:text', async (ctx) => {
             customerState.action = 'awaiting_link';
 
             await ctx.reply(
-                `✅ *Quantity: ${qty.toLocaleString()}*\n` +
-                `💰 *Price: KES ${adjustedPrice}*\n\n` +
-                `Now send the link or username to promote:\n` +
-                `_Examples:_\n` +
-                `• Instagram: \`https://instagram.com/username\`\n` +
-                `• TikTok: \`https://tiktok.com/@username\`\n` +
-                `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
+                `✅ *Quantity: ${qty.toLocaleString()}*
+` +
+                `💰 *Price: KES ${adjustedPrice}*
+
+` +
+                `Now send the link or username to promote:
+` +
+                `_Examples:_
+` +
+                `• Instagram: \`https://instagram.com/username\`
+` +
+                `• TikTok: \`https://tiktok.com/@username\`
+` +
+                `• YouTube: \`https://youtube.com/watch?v=xxx\`
+` +
                 `• Telegram: \`https://t.me/channelname\``,
                 { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
             );
             return;
         }
 
-        // === PROVIDER CHOICE ===
+        // === QUANTITY INPUT (OPTION FLOW) ===
+        if (customerState.action === 'awaiting_qty_for_option') {
+            const rawText = ctx.message.text.trim().replace(/,/g, '');
+            const qty = parseInt(rawText);
+            const optData = customerState.data;
+            const min = parseInt(optData?.min) || 50;
+            const max = parseInt(optData?.max) || 100000;
+
+            console.log(`[QTY-OPT] raw="${rawText}" qty=${qty} min=${min} max=${max}`);
+
+            if (isNaN(qty) || qty < min || qty > max) {
+                await ctx.reply(
+                    `❌ Invalid quantity.
+
+` +
+                    `• Range: *${min.toLocaleString()} - ${max.toLocaleString()}*
+
+Please enter a valid quantity:`,
+                    { parse_mode: "Markdown" }
+                );
+                return;
+            }
+
+            const cfg = store.pricingConfig || {};
+            const rate = parseFloat(optData?.rate) || 1;
+
+            // Unified pricing formula (same as website)
+            const exchangeRate = cfg?.exchangeRate || 130;
+            const markup = cfg?.markupMultiplier || 1.5;
+            const tierMultiplier = optData?.tierMultiplier || 1.0;
+            const rawTotal = ((rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
+            const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
+
+            optData.quantity = qty;
+            optData.price = adjustedPrice;
+            customerState.action = 'awaiting_link';
+
+            console.log(`[QTY-OPT] Success! qty=${qty} price=${adjustedPrice}`);
+
+            const duration = formatDuration(optData.deliveryMinutes || 240);
+
+            await ctx.reply(
+                `✅ *Quantity: ${qty.toLocaleString()}*
+` +
+                `💰 *Price: KES ${adjustedPrice}*
+` +
+                `⏱️ *Delivery: ${duration}*
+
+` +
+                `Now send the link or username to promote:
+` +
+                `_Examples:_
+` +
+                `• Instagram: \`https://instagram.com/username\`
+` +
+                `• TikTok: \`https://tiktok.com/@username\`
+` +
+                `• YouTube: \`https://youtube.com/watch?v=xxx\`
+` +
+                `• Telegram: \`https://t.me/channelname\``,
+                { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
+            );
+            return;
+        }// === PROVIDER CHOICE ===
         if (customerState.action === 'awaiting_provider_choice') {
             await ctx.reply("⚠️ Please select a delivery speed option from the buttons above.");
             return;
@@ -1378,7 +1497,19 @@ bot.on('message:text', async (ctx) => {
 
             const { serviceId, selectedProvider, serviceName, link, quantity, price } = customerState.data;
             const provider = selectedProvider?.provider || 'smmfollows';
-            const providerServiceId = selectedProvider?.providerServiceId || serviceId;
+
+            // Resolve providerServiceId: from selected provider > from service doc > fallback to serviceId
+            let providerServiceId = selectedProvider?.providerServiceId;
+            if (!providerServiceId) {
+                const svcDoc = await Service.findOne({ serviceId });
+                if (svcDoc && svcDoc.options && svcDoc.options.length > 0) {
+                    providerServiceId = svcDoc.options[0].providerServiceId;
+                } else if (svcDoc && svcDoc.serviceId < 1000) {
+                    providerServiceId = svcDoc.serviceId;
+                }
+            }
+            if (!providerServiceId) providerServiceId = serviceId;
+
             const reference = `ORD${Date.now()}`;
 
             const freshStore = await getDefaultStore(true);
