@@ -526,14 +526,21 @@ async function showCustomerMenu(ctx) {
     const keyboard = getPlatformKeyboard(services);
 
     const welcomeText = store.welcomeMessage || "Welcome! Boost your social media presence. Choose a platform to get started:";
-    const photoUrl = store.welcomePhoto || `${APP_URL}/welcome-default.jpg`;
 
-    try {
-        await ctx.replyWithPhoto(photoUrl, { caption: welcomeText, reply_markup: keyboard });
-    } catch (err) {
-        console.error('[showCustomerMenu] Photo send failed:', err.message);
-        await ctx.reply(welcomeText, { reply_markup: keyboard });
+    // Only send photo if we have a valid-looking image URL
+    const photoUrl = store.welcomePhoto;
+    const hasValidPhoto = photoUrl && (photoUrl.endsWith('.jpg') || photoUrl.endsWith('.jpeg') || photoUrl.endsWith('.png') || photoUrl.endsWith('.webp') || photoUrl.endsWith('.gif'));
+
+    if (hasValidPhoto) {
+        try {
+            await ctx.replyWithPhoto(photoUrl, { caption: welcomeText, reply_markup: keyboard });
+            return;
+        } catch (err) {
+            console.log('[showCustomerMenu] Photo unavailable, falling back to text');
+        }
     }
+
+    await ctx.reply(welcomeText, { reply_markup: keyboard });
 }
 
 // ==========================================
@@ -563,17 +570,22 @@ Manage your store, view orders, and configure services below.`;
     // Send welcome with main menu keyboard
     const store = await getDefaultStore();
     const welcomeText = store?.welcomeMessage || "🚀 *Welcome to Multi Social Deeps!*\n\nBoost your social media presence with real engagement.\n\nChoose an option below or tap 💎 Plans to browse services.";
-    const photoUrl = store?.welcomePhoto || `${APP_URL}/welcome-default.jpg`;
+    const photoUrl = store?.welcomePhoto;
+    const hasValidPhoto = photoUrl && (photoUrl.endsWith('.jpg') || photoUrl.endsWith('.jpeg') || photoUrl.endsWith('.png') || photoUrl.endsWith('.webp') || photoUrl.endsWith('.gif'));
 
-    try {
-        await ctx.replyWithPhoto(photoUrl, { 
-            caption: welcomeText, 
-            parse_mode: "Markdown",
-            reply_markup: getMainMenuKeyboard()
-        });
-    } catch (e) {
-        await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+    if (hasValidPhoto) {
+        try {
+            await ctx.replyWithPhoto(photoUrl, { 
+                caption: welcomeText, 
+                parse_mode: "Markdown",
+                reply_markup: getMainMenuKeyboard()
+            });
+            return;
+        } catch (e) {
+            console.log('[handleStart] Photo unavailable, using text');
+        }
     }
+    await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
 }
 
 bot.command("start", handleStart);
@@ -903,7 +915,7 @@ bot.on('callback_query:data', async (ctx) => {
 
         const typeEmojis = { followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧' };
         await ctx.reply(
-            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + t.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
+            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
             { parse_mode: "Markdown", reply_markup: keyboard }
         );
         return;
@@ -1381,7 +1393,9 @@ app.get('/api/megapay/webhook', (req, res) => {
 
 app.post('/api/upload', validateInitData, upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `${APP_URL}/uploads/${req.file.filename}`;
+    // Ensure APP_URL has no trailing slash
+    const baseUrl = APP_URL.replace(/\/$/, '');
+    const url = `${baseUrl}/uploads/${req.file.filename}`;
     res.json({ success: true, url, name: req.file.originalname, size: req.file.size });
 });
 
