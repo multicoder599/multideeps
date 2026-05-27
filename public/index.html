@@ -475,7 +475,7 @@
 
     <div class="form-group">
       <label>Quantity</label>
-      <input type="number" id="order-qty" placeholder="100">
+      <input type="number" id="order-qty" placeholder="100" oninput="updateDynamicPrice()">
       <div class="hint" id="qty-hint">Enter a value between 50 and 10,000</div>
     </div>
 
@@ -686,9 +686,10 @@ function openOrderModal(serviceId, optionIdx) {
 
   currentService = svc;
   currentOptionIdx = optionIdx;
+  window.currentOpt = opt; // Store for dynamic calculation
 
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
-  const price = Math.max(20, Math.ceil((opt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
+  const price = calculatePrice(opt.rate, 500, cfg);
   const duration = opt.deliveryMinutes < 60 ? `~${opt.deliveryMinutes} min` : `~${Math.round(opt.deliveryMinutes/60)} hrs`;
   const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast Delivery' : (opt.deliveryMinutes <= 360 ? '🔥 Quick Delivery' : '💰 Standard Delivery');
 
@@ -697,13 +698,45 @@ function openOrderModal(serviceId, optionIdx) {
   document.getElementById('sum-service').textContent = svc.displayName || svc.name;
   document.getElementById('sum-speed').textContent = `${speedLabel} (${duration})`;
   document.getElementById('sum-range').textContent = `${opt.min.toLocaleString()} - ${opt.max.toLocaleString()}`;
-  document.getElementById('sum-price').textContent = `KES ${price}`;
+  document.getElementById('sum-price').textContent = `KES ${price} / 500 qty`;
   document.getElementById('btn-price').textContent = price;
   document.getElementById('qty-hint').textContent = `Enter a value between ${opt.min.toLocaleString()} and ${opt.max.toLocaleString()}`;
   document.getElementById('order-qty').placeholder = opt.min;
+  document.getElementById('order-qty').value = '';
 
   document.getElementById('order-modal').classList.add('active');
   document.body.style.overflow = 'hidden';
+}
+
+function calculatePrice(rate, quantity, cfg) {
+  const r = parseFloat(rate) || 0;
+  if (r <= 0 || quantity <= 0) return 0;
+  const exchangeRate = cfg?.exchangeRate || 130;
+  const markup = cfg?.markupMultiplier || 1.5;
+  const costPer1k = r * exchangeRate;
+  const pricePer1k = costPer1k * markup;
+  const total = (pricePer1k / 1000) * quantity;
+  return Math.max(20, Math.ceil(total / 10) * 10);
+}
+
+function updateDynamicPrice() {
+  const qtyInput = document.getElementById('order-qty');
+  const btnPrice = document.getElementById('btn-price');
+  const sumPrice = document.getElementById('sum-price');
+  const opt = window.currentOpt;
+  if (!opt || !qtyInput.value) {
+    btnPrice.textContent = '0';
+    return;
+  }
+  const qty = parseInt(qtyInput.value);
+  if (isNaN(qty) || qty < opt.min || qty > opt.max) {
+    btnPrice.textContent = '—';
+    return;
+  }
+  const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
+  const price = calculatePrice(opt.rate, qty, cfg);
+  btnPrice.textContent = price;
+  sumPrice.textContent = `KES ${price} for ${qty.toLocaleString()} qty`;
 }
 
 function closeModal() {
@@ -733,7 +766,7 @@ async function submitOrder() {
   const qty = parseInt(document.getElementById('order-qty').value);
   const phone = document.getElementById('order-phone').value.trim().replace(/\D/g, '');
   const name = document.getElementById('order-name').value.trim();
-  const opt = (currentService.options?.length ? currentService.options : [{
+  const opt = window.currentOpt || (currentService.options?.length ? currentService.options : [{
     rate: parseFloat(currentService.rate) || 1, min: parseInt(currentService.min) || 50, max: parseInt(currentService.max) || 10000
   }])[currentOptionIdx];
 

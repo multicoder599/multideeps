@@ -893,10 +893,10 @@ bot.on('callback_query:data', async (ctx) => {
     if (data.startsWith('type_')) {
         const parts = data.replace('type_', '').split('_');
         const platform = parts[0];
-        const type = parts[1];
+        const serviceType = parts[1];
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
         const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } });
-        const filtered = services.filter(s => (s.platform || detectPlatform(s)) === platform && detectType(s) === type);
+        const filtered = services.filter(s => (s.platform || detectPlatform(s)) === platform && detectType(s) === serviceType);
         if (filtered.length === 0) return ctx.reply("❌ No services found.");
 
         const keyboard = new InlineKeyboard();
@@ -904,18 +904,21 @@ bot.on('callback_query:data', async (ctx) => {
 
         for (const s of filtered) {
             const displayName = s.displayName || cleanServiceName(s);
-            // Show each provider option
             const options = s.options || [];
-            const bestOption = options.sort((a,b) => a.rate - b.rate)[0];
-            const startPrice = bestOption ? getTierDisplayPrice(bestOption.rate, (cfg.tiers?.[0]?.maxQty || 500), cfg) : '??';
-            const rawLabel = `${displayName} | KES ${startPrice}`;
+            let bestRate = parseFloat(s.rate) || 1;
+            if (options.length > 0) {
+                bestRate = options.sort((a,b) => a.rate - b.rate)[0].rate;
+            }
+            const startPrice = getTierDisplayPrice(bestRate, (cfg.tiers?.[0]?.maxQty || 500), cfg);
+            const rawLabel = `${displayName} — from KES ${startPrice}`;
             keyboard.text(btnText(rawLabel), `svc_${s.serviceId}`).row();
         }
         keyboard.text('🔙 Back', `plat_${platform}`);
 
         const typeEmojis = { followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧' };
+        const typeLabel = serviceType.charAt(0).toUpperCase() + serviceType.slice(1);
         await ctx.reply(
-            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
+            `${typeEmojis[serviceType] || '🔧'} *${typeLabel}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
             { parse_mode: "Markdown", reply_markup: keyboard }
         );
         return;
@@ -961,10 +964,11 @@ bot.on('callback_query:data', async (ctx) => {
         });
         text += `\n_Price shown is for max tier qty. Actual price scales with your quantity._`;
 
-        for (const tier of tiers) {
+        for (let i = 0; i < tiers.length; i++) {
+            const tier = tiers[i];
             const price = getTierDisplayPrice(bestRate, tier.maxQty, cfg);
-            const btnLabel = `${tier.label}\n${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()} @ KES ${price}`;
-            keyboard.text(btnText(btnLabel), `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
+            const btnLabel = `${tier.label} | ${tier.minQty.toLocaleString()}-${tier.maxQty.toLocaleString()} @ KES ${price}`;
+            keyboard.text(btnText(btnLabel), `tier_${serviceId}_${i}`).row();
         }
         keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
 
@@ -1069,11 +1073,16 @@ bot.on('callback_query:data', async (ctx) => {
         if (services.length === 0) return ctx.reply("❌ No services in this category.");
 
         const keyboard = new InlineKeyboard();
+        const cfg = store.pricingConfig || {};
         services.forEach(s => {
-            const cfg = enabled.find(e => e.serviceId === s.serviceId);
-            const price = cfg?.customPrice || 0;
+            const options = s.options || [];
+            let bestRate = parseFloat(s.rate) || 1;
+            if (options.length > 0) {
+                bestRate = options.sort((a,b) => a.rate - b.rate)[0].rate;
+            }
+            const price = getTierDisplayPrice(bestRate, 500, cfg);
             const displayName = s.displayName || cleanServiceName(s);
-            keyboard.text(btnText(`${displayName} — KES ${price}/1k`), `svc_${s.serviceId}`).row();
+            keyboard.text(btnText(`${displayName} — from KES ${price}`), `svc_${s.serviceId}`).row();
         });
         keyboard.text('🔙 Back', 'back_start');
 
@@ -2028,13 +2037,8 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Admin route — only accessible via Telegram Mini App (has init data)
+// Admin route — serves admin.html
 app.get('/admin', (req, res) => {
-    const initData = req.headers['x-telegram-init-data'];
-    // If no init data and not already in Telegram WebApp context, redirect to home
-    if (!initData && !req.query._tg_webapp) {
-        return res.redirect('/');
-    }
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
