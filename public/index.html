@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Multi Social Deeps - Boost Your Social Media</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0a0a0f; color: #fff; overflow-x: hidden; padding-bottom: 100px; }
+  .hidden { display: none !important; }
+
+  #init-loader { position: fixed; inset: 0; background: #0a0a0f; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #init-loader .spinner { width: 40px; height: 40px; border: 3px solid #222; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+  #init-loader p { color: #888; font-size: 14px; font-weight: 600; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .app-header { position: sticky; top: 0; z-index: 100; background: rgba(10,10,15,0.95); backdrop-filter: blur(10px); border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; height: 56px; }
+  .app-header h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, #8b5cf6, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .app-header .admin-link { font-size: 12px; color: #666; text-decoration: none; font-weight: 600; }
+
+  .hero { position: relative; width: 100%; height: 280px; overflow: hidden; }
+  .hero img { width: 100%; height: 100%; object-fit: cover; }
+  .hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 40%, #0a0a0f 100%); }
+  .hero-text { position: absolute; bottom: 20px; left: 16px; right: 16px; }
+  .hero-text h2 { font-size: 24px; font-weight: 800; margin-bottom: 6px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+  .hero-text p { font-size: 14px; color: #ccc; font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
+  .section-title { font-size: 18px; font-weight: 800; margin: 24px 16px 12px; letter-spacing: -0.3px; }
+  .section-sub { font-size: 13px; color: #888; margin: -8px 16px 16px; font-weight: 500; }
+
+  .platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 16px; }
+  .platform-card { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 20px 10px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .platform-card:hover { border-color: #8b5cf6; transform: translateY(-2px); }
+  .platform-card .icon { width: 48px; height: 48px; margin: 0 auto 10px; }
+  .platform-card .name { font-size: 13px; font-weight: 700; color: #fff; }
+  .platform-card .count { font-size: 11px; color: #666; margin-top: 4px; font-weight: 500; }
+
+  .service-list { padding: 0 16px; }
+  .service-item { background: #15151a; border: 1px solid #222; border-radius: 14px; padding: 16px; margin-bottom: 10px; }
+  .service-item .service-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .service-item .service-name { font-size: 16px; font-weight: 700; }
+  .service-item .service-type { font-size: 11px; color: #888; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+  .service-item .options { display: flex; flex-direction: column; gap: 8px; }
+  .option-btn { display: flex; align-items: center; justify-content: space-between; background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: all 0.2s; }
+  .option-btn:hover { border-color: #8b5cf6; background: #1f1f2e; }
+  .option-btn .opt-left { display: flex; flex-direction: column; gap: 2px; }
+  .option-btn .opt-speed { font-size: 13px; font-weight: 700; }
+  .option-btn .opt-meta { font-size: 11px; color: #888; }
+  .option-btn .opt-right { text-align: right; }
+  .option-btn .opt-price { font-size: 18px; font-weight: 800; color: #34c759; font-family: 'JetBrains Mono', monospace; }
+  .option-btn .opt-duration { font-size: 11px; color: #ff9f0a; font-weight: 600; }
+
+  .back-btn { background: none; border: none; color: #8b5cf6; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; margin: 16px; }
+
+  .form-group { margin-bottom: 16px; padding: 0 16px; }
+  .form-label { display: block; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 700; }
+  .form-input { width: 100%; background: #1a1a24; border: 1px solid #333; color: #fff; padding: 16px; border-radius: 12px; font-size: 16px; outline: none; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .form-input:focus { border-color: #8b5cf6; }
+  .form-hint { font-size: 12px; color: #666; margin-top: 6px; font-weight: 500; }
+
+  .btn-primary { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: #fff; border: none; padding: 16px 24px; border-radius: 12px; font-weight: 800; font-size: 16px; cursor: pointer; width: calc(100% - 32px); margin: 0 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: #1a1a24; color: #fff; border: 1px solid #333; padding: 14px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; width: calc(100% - 32px); margin: 0 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+  .order-summary { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 20px; margin: 16px; }
+  .order-summary .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+  .order-summary .summary-row .label { color: #888; font-weight: 500; }
+  .order-summary .summary-row .value { font-weight: 700; }
+  .order-summary .summary-total { border-top: 1px solid #222; padding-top: 12px; margin-top: 12px; }
+  .order-summary .summary-total .value { font-size: 22px; color: #34c759; font-family: 'JetBrains Mono', monospace; }
+
+  .status-card { background: #15151a; border: 1px solid #222; border-radius: 16px; padding: 24px; margin: 16px; text-align: center; }
+  .status-card .status-icon { font-size: 48px; margin-bottom: 12px; }
+  .status-card .status-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .status-card .status-text { font-size: 14px; color: #888; margin-bottom: 16px; line-height: 1.5; }
+
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: #1a1a24; border: 1px solid #333; color: #34c759; padding: 14px 24px; border-radius: 12px; font-weight: 700; z-index: 200; display: flex; align-items: center; gap: 8px; animation: slideDown 0.3s ease; }
+  @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  .disclaimer { background: #1a1200; border: 1px solid #332200; border-radius: 10px; padding: 12px; margin: 0 16px 16px; font-size: 12px; color: #ff9f0a; font-weight: 500; line-height: 1.5; }
+  .disclaimer strong { color: #fff; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: #666; }
+  .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+
+  @media (min-width: 768px) {
+    .platform-grid { grid-template-columns: repeat(4, 1fr); max-width: 600px; margin: 0 auto; }
+    .service-list, .form-group { max-width: 600px; margin: 0 auto; padding: 0; }
+    .service-item { max-width: 600px; margin: 0 auto 10px; }
+    .btn-primary, .btn-secondary { max-width: 600px; margin: 0 auto; display: block; }
+    .order-summary, .status-card, .disclaimer { max-width: 600px; margin: 16px auto; }
+    .back-btn { max-width: 600px; margin: 16px auto; }
+    .section-title, .section-sub { max-width: 600px; margin: 24px auto 12px; }
+    .hero { height: 350px; }
+    .hero-text { max-width: 600px; margin: 0 auto; left: 0; right: 0; padding: 0 16px; }
+  }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<div id="init-loader">
+  <div class="spinner"></div>
+  <p>Loading Multi Social Deeps...</p>
+</div>
+
+<div id="app">
+  <div class="app-header">
+    <h1>🚀 Multi Social Deeps</h1>
+    <a href="/admin" class="admin-link">Admin →</a>
+  </div>
+
+  <!-- HERO / WELCOME -->
+  <div class="hero">
+    <img id="welcome-img" src="/welcome-default.jpg" alt="Welcome" onerror="this.style.display='none'">
+    <div class="hero-overlay"></div>
+    <div class="hero-text">
+      <h2 id="welcome-title">Grow Your Audience</h2>
+      <p id="welcome-sub">Real growth. Real engagement. Real results.</p>
+    </div>
+  </div>
+
+  <!-- PLATFORMS -->
+  <div id="screen-platforms">
+    <div class="section-title">Choose Platform</div>
+    <div class="section-sub">Select where you want to boost your presence</div>
+    <div class="platform-grid" id="platforms-grid"></div>
+  </div>
+
+  <!-- SERVICE TYPES -->
+  <div id="screen-types" class="hidden">
+    <button class="back-btn" onclick="showPlatforms()">← Back to Platforms</button>
+    <div class="section-title" id="types-title">Instagram</div>
+    <div class="section-sub">Choose the type of service</div>
+    <div class="service-list" id="types-list"></div>
+  </div>
+
+  <!-- SERVICES -->
+  <div id="screen-services" class="hidden">
+    <button class="back-btn" onclick="showTypes(currentPlatform)">← Back to Types</button>
+    <div class="section-title" id="services-title">Followers</div>
+    <div class="section-sub">Pick your speed & price</div>
+    <div class="service-list" id="services-list"></div>
+  </div>
+
+  <!-- ORDER FORM -->
+  <div id="screen-order" class="hidden">
+    <button class="back-btn" onclick="showServices(currentPlatform, currentType)">← Back to Services</button>
+    <div class="section-title">Place Order</div>
+
+    <div class="order-summary">
+      <div class="summary-row"><span class="label">Service</span><span class="value" id="order-service">-</span></div>
+      <div class="summary-row"><span class="label">Speed</span><span class="value" id="order-speed">-</span></div>
+      <div class="summary-row"><span class="label">Min / Max</span><span class="value" id="order-limits">-</span></div>
+      <div class="summary-row summary-total"><span class="label">Price per 500</span><span class="value" id="order-price">-</span></div>
+    </div>
+
+    <div class="disclaimer">
+      <strong>⏳ Delivery Notice:</strong> Orders typically start within minutes. Larger quantities may take up to 24 hours depending on platform load. All times are estimates.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">LINK OR USERNAME</label>
+      <input class="form-input" id="order-link" placeholder="https://instagram.com/yourusername">
+      <div class="form-hint">Paste the full URL to your profile, post, or video</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">QUANTITY</label>
+      <input class="form-input" id="order-quantity" type="number" placeholder="100">
+      <div class="form-hint" id="qty-hint">Enter a value between 50 and 10,000</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">M-PESA PHONE NUMBER</label>
+      <input class="form-input" id="order-phone" placeholder="07XX XXX XXX">
+      <div class="form-hint">You'll receive an STK push to complete payment</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">YOUR NAME (Optional)</label>
+      <input class="form-input" id="order-name" placeholder="John Doe">
+    </div>
+
+    <button class="btn-primary" id="btn-pay" onclick="submitOrder()">💳 PROCEED TO PAY</button>
+  </div>
+
+  <!-- PAYMENT STATUS -->
+  <div id="screen-status" class="hidden">
+    <div class="status-card" id="status-card">
+      <div class="status-icon">⏳</div>
+      <div class="status-title">Processing Payment</div>
+      <div class="status-text">Check your phone for the M-Pesa prompt and enter your PIN to complete.</div>
+      <button class="btn-secondary" onclick="checkOrderStatus()" style="margin-top:12px;width:auto;display:inline-block;">🔄 Check Status</button>
+    </div>
+  </div>
+
+  <!-- ORDER SUCCESS -->
+  <div id="screen-success" class="hidden">
+    <div class="status-card">
+      <div class="status-icon">🎉</div>
+      <div class="status-title">Payment Successful!</div>
+      <div class="status-text">Your order has been placed and is now being processed. You'll receive updates automatically.</div>
+      <div style="margin-top:16px;font-size:13px;color:#888;">
+        Order Ref: <span id="success-ref" style="color:#fff;font-family:'JetBrains Mono',monospace;">-</span>
+      </div>
+      <button class="btn-primary" onclick="showPlatforms()" style="margin-top:20px;">🛒 Order More</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== STATE ====================
+const API_BASE = '';
+let storeConfig = null;
+let allServices = [];
+let currentPlatform = '';
+let currentType = '';
+let currentService = null;
+let currentOptionIdx = 0;
+let currentSessionId = '';
+let currentReference = '';
+
+const PLATFORM_ICONS = {
+  instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>',
+  tiktok: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.88-2.89 2.89 2.89 0 0 1 2.88-2.89c.2 0 .39.02.58.05V9.3a6.35 6.35 0 0 0-.58-.03A6.34 6.34 0 0 0 3 15.61a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V7.55a8.15 8.15 0 0 0 4.91 1.64V5.74a4.85 4.85 0 0 1-1-.05z"/></svg>',
+  twitter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+  facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+  telegram: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.329-.913.489-1.302.481-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
+  reddit: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.532 1.14-.861 2.56-1.378 4.097-1.378 1.068 0 2.083.264 2.982.738-.605-3.186-3.24-5.588-6.398-5.588-.608 0-1.196.084-1.754.24l-.942-4.42c-.136-.61-.715-1.054-1.372-1.054zM9.06 8.179c1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 1.143 0 2.186.388 3.022 1.04.836-.652 1.88-1.04 3.022-1.04 2.77 0 5.016 2.24 5.016 5.017 0 .816-.196 1.584-.54 2.264-1.084 2.177-3.502 3.704-6.306 3.704-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-1.143 0-2.186-.388-3.022-1.04-.836.652-1.88 1.04-3.022 1.04-2.804 0-5.222-1.527-6.306-3.704a5.013 5.013 0 0 1-.54-2.264c0-2.777 2.246-5.017 5.016-5.017z"/></svg>',
+  snapchat: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 0 1 .17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 0 0-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12 1.033-.301a.42.42 0 0 1 .17-.029c.086 0 .164.029.222.083.104.094.136.24.09.401-.135.435-.44.855-.901 1.232-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42h.003c.3 0 .659-.12 1.033-.3a.42.42 0 0 1 .17-.03c.086 0 .164.03.222.084.104.094.136.24.09.4-.135.436-.44.856-.901 1.233-.46.378-1.024.673-1.69.879.18.45.553.822 1.094 1.088.525.258 1.178.42 1.89.42.495 0 .9-.405.9-.9 0-.18-.06-.345-.15-.48-.165-.24-.435-.42-.75-.48-.615-.12-1.155-.36-1.605-.72-.435-.345-.75-.795-.915-1.32-.66.18-1.38.27-2.13.27-.75 0-1.47-.09-2.13-.27-.165.525-.48.975-.915 1.32-.45.36-.99.6-1.605.72-.315.06-.585.24-.75.48a.87.87 0 0 0-.15.48c0 .495.405.9.9.9.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3h.003c.712 0 1.365-.162 1.89-.42.54-.266.913-.638 1.094-1.088-.666-.206-1.23-.501-1.69-.879-.461-.377-.766-.797-.901-1.233-.046-.16-.014-.306.09-.4.058-.054.136-.084.222-.084.058 0 .116.012.17.03.374.18.733.3 1.033.3.198 0 .326-.045.401-.09-.008-.165-.018-.33-.03-.51l-.003-.06c-.104-1.628-.23-3.654.299-4.847C16.859 1.069 20.217.793 21.206.793z"/></svg>',
+  whatsapp: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>'
+};
+
+const PLATFORM_NAMES = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  twitter: 'Twitter / X',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  telegram: 'Telegram',
+  reddit: 'Reddit',
+  snapchat: 'Snapchat',
+  whatsapp: 'WhatsApp'
+};
+
+const TYPE_EMOJIS = {
+  followers: '👥',
+  subscribers: '🔔',
+  members: '👥',
+  views: '👁️',
+  likes: '❤️',
+  comments: '💬',
+  other: '🔧'
+};
+
+// ==================== INIT ====================
+async function init() {
+  try {
+    const store = await fetch(`${API_BASE}/api/web/store`).then(r => r.json());
+    storeConfig = store;
+    if (store.welcomePhoto) {
+      document.getElementById('welcome-img').src = store.welcomePhoto;
+    }
+    if (store.welcomeMessage) {
+      document.getElementById('welcome-sub').textContent = store.welcomeMessage;
+    }
+    document.getElementById('welcome-title').textContent = store.botName || 'Grow Your Audience';
+  } catch (e) {
+    console.error('Store load error:', e);
+  }
+
+  try {
+    const services = await fetch(`${API_BASE}/api/web/services`).then(r => r.json());
+    allServices = services;
+    renderPlatforms();
+  } catch (e) {
+    console.error('Services load error:', e);
+    showToast('❌ Failed to load services');
+  }
+
+  document.getElementById('init-loader').classList.add('hidden');
+}
+
+// ==================== RENDERERS ====================
+function renderPlatforms() {
+  const grid = document.getElementById('platforms-grid');
+  const platforms = {};
+  allServices.forEach(s => {
+    const p = s.platform || s.category;
+    if (!platforms[p]) platforms[p] = 0;
+    platforms[p]++;
+  });
+
+  grid.innerHTML = Object.entries(platforms).map(([plat, count]) => {
+    const icon = PLATFORM_ICONS[plat] || '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>';
+    const name = PLATFORM_NAMES[plat] || plat.charAt(0).toUpperCase() + plat.slice(1);
+    return `
+      <div class="platform-card" onclick="showTypes('${plat}')">
+        <div class="icon" style="color:#8b5cf6;">${icon}</div>
+        <div class="name">${name}</div>
+        <div class="count">${count} services</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showPlatforms() {
+  hideAllScreens();
+  document.getElementById('screen-platforms').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+function showTypes(platform) {
+  currentPlatform = platform;
+  hideAllScreens();
+  document.getElementById('screen-types').classList.remove('hidden');
+  document.getElementById('types-title').textContent = PLATFORM_NAMES[platform] || platform;
+
+  const types = new Set();
+  allServices.filter(s => (s.platform || s.category) === platform).forEach(s => types.add(s.type || 'other'));
+
+  const list = document.getElementById('types-list');
+  list.innerHTML = Array.from(types).map(t => {
+    const emoji = TYPE_EMOJIS[t] || '🔧';
+    const count = allServices.filter(s => (s.platform || s.category) === platform && (s.type || 'other') === t).length;
+    return `
+      <div class="service-item" onclick="showServices('${platform}', '${t}')" style="cursor:pointer;">
+        <div class="service-header">
+          <div>
+            <div class="service-name">${emoji} ${t.charAt(0).toUpperCase() + t.slice(1)}</div>
+            <div class="service-type">${count} options available</div>
+          </div>
+          <span style="color:#666;font-size:20px;">›</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+  window.scrollTo(0, 0);
+}
+
+function showServices(platform, type) {
+  currentType = type;
+  hideAllScreens();
+  document.getElementById('screen-services').classList.remove('hidden');
+  document.getElementById('services-title').textContent = `${PLATFORM_NAMES[platform] || platform} — ${type.charAt(0).toUpperCase() + t.slice(1)}`;
+
+  const filtered = allServices.filter(s => (s.platform || s.category) === platform && (s.type || 'other') === type);
+  const list = document.getElementById('services-list');
+  const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
+
+  list.innerHTML = filtered.map((s, idx) => {
+    const options = s.options || [];
+    const optsHtml = options.map((o, oidx) => {
+      const price = Math.max(20, Math.ceil((o.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
+      const duration = o.deliveryMinutes < 60 ? `~${o.deliveryMinutes} min` : `~${Math.round(o.deliveryMinutes/60)} hrs`;
+      const speedLabel = o.deliveryMinutes <= 60 ? '⚡ Fast Delivery' : (o.deliveryMinutes <= 360 ? '🔥 Quick Delivery' : '💰 Best Value');
+      const speedColor = o.deliveryMinutes <= 60 ? '#ec4899' : (o.deliveryMinutes <= 360 ? '#8b5cf6' : '#34c759');
+
+      return `
+        <div class="option-btn" onclick="showOrderForm(${s.serviceId}, ${oidx})">
+          <div class="opt-left">
+            <span class="opt-speed" style="color:${speedColor}">${speedLabel}</span>
+            <span class="opt-meta">Min: ${o.min.toLocaleString()} | Max: ${o.max.toLocaleString()}</span>
+          </div>
+          <div class="opt-right">
+            <div class="opt-price">KES ${price}</div>
+            <div class="opt-duration">${duration}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="service-item">
+        <div class="service-header">
+          <div>
+            <div class="service-name">${idx+1}. ${s.displayName || s.name}</div>
+            <div class="service-type">${s.type || 'Service'}</div>
+          </div>
+        </div>
+        <div class="options">${optsHtml}</div>
+      </div>
+    `;
+  }).join('');
+  window.scrollTo(0, 0);
+}
+
+function showOrderForm(serviceId, optionIdx) {
+  const svc = allServices.find(s => s.serviceId === serviceId);
+  if (!svc) return;
+  const opt = svc.options[optionIdx];
+  if (!opt) return;
+
+  currentService = svc;
+  currentOptionIdx = optionIdx;
+
+  hideAllScreens();
+  document.getElementById('screen-order').classList.remove('hidden');
+
+  const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
+  const price = Math.max(20, Math.ceil((opt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500 / 10) * 10);
+  const duration = opt.deliveryMinutes < 60 ? `~${opt.deliveryMinutes} min` : `~${Math.round(opt.deliveryMinutes/60)} hrs`;
+  const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
+
+  document.getElementById('order-service').textContent = svc.displayName || svc.name;
+  document.getElementById('order-speed').textContent = `${speedLabel} (${duration})`;
+  document.getElementById('order-limits').textContent = `${opt.min.toLocaleString()} - ${opt.max.toLocaleString()}`;
+  document.getElementById('order-price').textContent = `KES ${price} / 500 qty`;
+  document.getElementById('qty-hint').textContent = `Enter a value between ${opt.min.toLocaleString()} and ${opt.max.toLocaleString()}`;
+  window.scrollTo(0, 0);
+}
+
+function hideAllScreens() {
+  ['screen-platforms', 'screen-types', 'screen-services', 'screen-order', 'screen-status', 'screen-success'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+// ==================== ORDER SUBMISSION ====================
+async function submitOrder() {
+  const link = document.getElementById('order-link').value.trim();
+  const qty = parseInt(document.getElementById('order-quantity').value);
+  const phone = document.getElementById('order-phone').value.trim().replace(/\D/g, '');
+  const name = document.getElementById('order-name').value.trim();
+  const opt = currentService.options[currentOptionIdx];
+
+  if (!link) { showToast('❌ Please enter a link'); return; }
+  if (!qty || isNaN(qty) || qty < opt.min || qty > opt.max) { 
+    showToast(`❌ Quantity must be between ${opt.min} and ${opt.max}`); 
+    return; 
+  }
+  if (!phone || phone.length < 9) { showToast('❌ Please enter a valid phone number'); return; }
+
+  const btn = document.getElementById('btn-pay');
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing...';
+
+  try {
+    // Format phone
+    let formattedPhone = phone;
+    if (formattedPhone.startsWith('0')) formattedPhone = '254' + formattedPhone.slice(1);
+    else if (!formattedPhone.startsWith('254')) formattedPhone = '254' + formattedPhone;
+
+    const initRes = await fetch(`${API_BASE}/api/web/order/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serviceId: currentService.serviceId,
+        optionIdx: currentOptionIdx,
+        quantity: qty,
+        link,
+        phone: formattedPhone,
+        customerName: name
+      })
+    }).then(r => r.json());
+
+    if (!initRes.success) {
+      throw new Error(initRes.error || 'Failed to initialize order');
+    }
+
+    currentSessionId = initRes.sessionId;
+    currentReference = initRes.reference;
+
+    // Trigger STK
+    const payRes = await fetch(`${API_BASE}/api/web/pay/stk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId, reference: currentReference })
+    }).then(r => r.json());
+
+    if (!payRes.success) {
+      throw new Error(payRes.error || 'Payment initiation failed');
+    }
+
+    hideAllScreens();
+    document.getElementById('screen-status').classList.remove('hidden');
+    showToast('📲 STK push sent! Check your phone.');
+
+    // Auto-check after 30s
+    setTimeout(checkOrderStatus, 30000);
+
+  } catch (err) {
+    showToast('❌ ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '💳 PROCEED TO PAY';
+  }
+}
+
+async function checkOrderStatus() {
+  if (!currentReference) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/web/order/status?reference=${currentReference}`).then(r => r.json());
+
+    if (res.status === 'completed' || res.orderStatus === 'Completed' || res.orderStatus === 'processing') {
+      hideAllScreens();
+      document.getElementById('screen-success').classList.remove('hidden');
+      document.getElementById('success-ref').textContent = currentReference;
+      showToast('🎉 Payment confirmed!');
+    } else if (res.status === 'failed') {
+      document.querySelector('#status-card .status-icon').textContent = '❌';
+      document.querySelector('#status-card .status-title').textContent = 'Payment Failed';
+      document.querySelector('#status-card .status-text').textContent = 'The payment was not completed. Please try again.';
+    } else {
+      showToast('⏳ Still processing... Check again in a moment.');
+    }
+  } catch (e) {
+    showToast('❌ Status check failed');
+  }
+}
+
+// ==================== UTILS ====================
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const div = document.createElement('div');
+  div.className = 'toast';
+  div.innerHTML = `<span>${msg.includes('✅') || msg.includes('🎉') ? '✓' : 'ℹ️'}</span> ${msg.replace(/[✅❌🎉📲⏳]/g, '').trim()}`;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

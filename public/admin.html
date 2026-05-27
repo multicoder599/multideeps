@@ -66,6 +66,7 @@
   .badge-green { background: #0d1f0d; color: #34c759; border: 1px solid #1a3a1a; }
   .badge-blue { background: #0a1a2e; color: #0a84ff; border: 1px solid #1a3a5a; }
   .badge-orange { background: #1a1200; color: #ff9f0a; border: 1px solid #332200; }
+  .badge-red { background: #1a0000; color: #ff3b30; border: 1px solid #3a1a1a; }
 
   .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   .data-table th { text-align: left; font-size: 11px; color: #888; text-transform: uppercase; padding: 10px; border-bottom: 1px solid #222; font-weight: 700; letter-spacing: 0.5px; }
@@ -123,6 +124,15 @@
   .img-preview-inline { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid #333; margin-bottom: 8px; }
 
   .preview-remove-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,59,48,0.9); color: #fff; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 10; }
+
+  .provider-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700; margin-left: 6px; }
+  .provider-smm { background: #0a1a2e; color: #0a84ff; }
+  .provider-peaker { background: #1a0a2e; color: #bf5af2; }
+
+  .option-row { background: #111; border: 1px solid #222; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 12px; }
+  .option-row .opt-provider { font-weight: 700; color: #0a84ff; }
+  .option-row .opt-price { font-family: 'JetBrains Mono', monospace; color: #34c759; }
+  .option-row .opt-speed { color: #ff9f0a; }
 </style>
 <base target="_blank">
 <base target="_blank">
@@ -246,6 +256,7 @@
         <button class="tab-btn active" onclick="switchTab('general')" id="tab-general">General</button>
         <button class="tab-btn" onclick="switchTab('payment')" id="tab-payment">Payment</button>
         <button class="tab-btn" onclick="switchTab('pricing')" id="tab-pricing">Pricing</button>
+        <button class="tab-btn" onclick="switchTab('apis')" id="tab-apis">APIs</button>
       </div>
 
       <div id="tab-content-general" class="tab-content">
@@ -340,6 +351,40 @@
         <div id="tiers-container"></div>
 
         <button class="btn-primary" style="margin-top:12px;" onclick="savePricingConfig()">SAVE PRICING CONFIG</button>
+      </div>
+
+      <div id="tab-content-apis" class="tab-content hidden">
+        <div style="background:#1a0a2e;border:1px solid #3a1a5a;border-radius:12px;padding:14px;margin-bottom:16px;">
+          <div style="font-weight:700;color:#bf5af2;margin-bottom:4px;">🔌 Dual API Setup</div>
+          <div style="font-size:12px;color:#888;line-height:1.5;">
+            Connect both SMMFollows and Peaker APIs. The bot will show customers the best option from each provider 
+            without revealing provider names. Fast = higher price/shorter delivery. Standard = lower price/longer delivery.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">SMMFOLLOWS API KEY</label>
+          <input class="form-input" id="edit-smm-key" placeholder="SMMFollows API Key">
+          <div class="form-hint">Primary provider — usually cheaper, standard speed</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SMMFOLLOWS API URL</label>
+          <input class="form-input" id="edit-smm-url" placeholder="https://smmfollows.com/api/v2">
+        </div>
+
+        <div style="height:1px;background:#222;margin:20px 0;"></div>
+
+        <div class="form-group">
+          <label class="form-label">PEAKER API KEY</label>
+          <input class="form-input" id="edit-peaker-key" placeholder="Peaker API Key (optional)">
+          <div class="form-hint">Secondary provider — usually faster, premium pricing</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">PEAKER API URL</label>
+          <input class="form-input" id="edit-peaker-url" placeholder="https://peaker.com/api/v2">
+        </div>
+
+        <button class="btn-primary" style="margin-top:12px;" onclick="saveApiConfig()">SAVE API CONFIG</button>
       </div>
 
       <button class="btn-primary" style="margin-top:20px;" onclick="saveStoreSettings()">SAVE CHANGES</button>
@@ -475,16 +520,13 @@ function loadSettings() {
   document.getElementById('edit-welcome').value = storeConfig.welcomeMessage || '';
   document.getElementById('edit-support').value = storeConfig.supportLink || '';
 
-  // Photo fields - properly load and display
   const welcomePhoto = storeConfig.welcomePhoto || '';
   const bannerImage = storeConfig.bannerImageUrl || '';
 
   document.getElementById('edit-welcome-photo').value = welcomePhoto;
   document.getElementById('edit-banner').value = bannerImage;
 
-  // Show welcome photo preview if exists
   setupPreview('welcome', welcomePhoto);
-  // Show banner preview if exists
   setupPreview('banner', bannerImage);
 
   const keyInput = document.getElementById('edit-megapay-key');
@@ -492,15 +534,23 @@ function loadSettings() {
   keyInput.placeholder = storeConfig.megapayApiKey ? '••••' + storeConfig.megapayApiKey.slice(-4) + ' (type new)' : 'Your Megapay API Key';
   document.getElementById('edit-megapay-email').value = storeConfig.megapayEmail || '';
 
-  // Webhook URL
   const webhookUrl = `${window.location.origin}/api/megapay/webhook`;
   document.getElementById('webhook-display').textContent = webhookUrl;
 
-  // Pricing config
   const pricing = storeConfig.pricingConfig || {};
   document.getElementById('edit-exchange-rate').value = pricing.exchangeRate || 130;
   document.getElementById('edit-markup').value = pricing.markupMultiplier || 1.4;
   renderTiers(pricing.tiers || []);
+
+  // API tab
+  document.getElementById('edit-smm-key').value = '';
+  document.getElementById('edit-smm-key').placeholder = 'Set in .env file';
+  document.getElementById('edit-smm-url').value = '';
+  document.getElementById('edit-smm-url').placeholder = 'https://smmfollows.com/api/v2';
+  document.getElementById('edit-peaker-key').value = '';
+  document.getElementById('edit-peaker-key').placeholder = 'Set in .env file';
+  document.getElementById('edit-peaker-url').value = '';
+  document.getElementById('edit-peaker-url').placeholder = 'https://peaker.com/api/v2';
 
   switchTab('general');
 }
@@ -594,7 +644,6 @@ async function handlePhotoUpload(input, type) {
   const previewImg = document.getElementById(type === 'welcome' ? 'welcome-photo-preview-img' : 'banner-preview-img');
   const hiddenInput = document.getElementById(type === 'welcome' ? 'edit-welcome-photo' : 'edit-banner');
 
-  // Show local preview immediately using FileReader
   const reader = new FileReader();
   reader.onload = (e) => {
     previewImg.src = e.target.result;
@@ -626,8 +675,6 @@ async function handlePhotoUpload(input, type) {
       wrapper.classList.add('has-file');
       statusEl.textContent = '✅ Uploaded!';
       statusEl.className = 'upload-status success';
-
-      // Auto-save to store
       await api('PUT', '/store', type === 'welcome' ? { welcomePhoto: data.url } : { bannerImage: data.url });
       showToast('✅ Photo saved to store!');
     } else {
@@ -636,7 +683,6 @@ async function handlePhotoUpload(input, type) {
   } catch (err) {
     statusEl.textContent = '❌ Upload failed: ' + err.message;
     statusEl.className = 'upload-status error';
-    // Revert preview on failure
     previewImg.src = '';
     previewBox.style.display = 'none';
     wrapper.classList.remove('has-file');
@@ -659,7 +705,6 @@ async function clearPhoto(type) {
   statusEl.className = 'upload-status';
   fileInput.value = '';
 
-  // Also clear on server
   try {
     await api('PUT', '/store', type === 'welcome' ? { welcomePhoto: '' } : { bannerImage: '' });
     showToast('✅ Photo removed');
@@ -705,6 +750,10 @@ async function savePricingConfig() {
   } catch (e) { showToast('❌ ' + e.message); }
 }
 
+async function saveApiConfig() {
+  showToast('⏳ API keys are managed via .env file. Please update your server environment variables and restart.');
+}
+
 function copyWebhook() {
   const url = document.getElementById('webhook-display').textContent;
   navigator.clipboard.writeText(url).then(() => showToast('✅ Copied!')).catch(() => showToast('✅ Copied!'));
@@ -731,17 +780,38 @@ async function showServices() {
 function renderServicesList() {
   const container = document.getElementById('services-list');
   const grouped = {};
-  services.forEach(s => { if (!grouped[s.category]) grouped[s.category] = []; grouped[s.category].push(s); });
+  services.forEach(s => { 
+    const key = s.platform || s.category || 'Other';
+    if (!grouped[key]) grouped[key] = []; 
+    grouped[key].push(s); 
+  });
 
   let html = '';
-  for (const [cat, items] of Object.entries(grouped)) {
-    html += `<div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">${cat}</div>`;
+  for (const [plat, items] of Object.entries(grouped)) {
+    const meta = { instagram: '📸', tiktok: '🎵', twitter: '🐦', facebook: '📘', youtube: '▶️', telegram: '✈️', reddit: '🔴', snapchat: '👻', whatsapp: '💬' };
+    const emoji = meta[plat] || '🔧';
+    html += `<div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;">${emoji} ${plat.charAt(0).toUpperCase() + plat.slice(1)}</div>`;
     items.forEach(s => {
+      const opts = s.options || [];
+      let optsHtml = '';
+      opts.forEach(o => {
+        const providerClass = o.provider === 'peaker' ? 'provider-peaker' : 'provider-smm';
+        const providerLabel = o.provider === 'peaker' ? 'PEAKER' : 'SMM';
+        optsHtml += `
+          <div class="option-row">
+            <span class="provider-badge ${providerClass}">${providerLabel}</span>
+            <span class="opt-price">KES ${Math.ceil(o.rate * 130 * 1.5 / 10) * 10}</span>
+            <span class="opt-speed">| ${o.deliveryMinutes < 60 ? '~' + o.deliveryMinutes + 'min' : '~' + Math.round(o.deliveryMinutes/60) + 'hrs'}</span>
+          </div>
+        `;
+      });
+
       html += `
         <div class="service-row" data-id="${s.serviceId}">
           <div class="info">
             <div class="name">${s.name}</div>
-            <div class="meta">${s.type} • Min: ${s.min} • Max: ${s.max} • Refill: ${s.refill ? '✅' : '❌'}</div>
+            <div class="meta">${s.type} • ${opts.length} provider${opts.length > 1 ? 's' : ''}</div>
+            ${optsHtml}
           </div>
           <div class="toggle ${s.isEnabled ? 'on' : ''}" onclick="toggleService(${s.serviceId}, this)" title="${s.isEnabled ? 'ON' : 'OFF'}"></div>
         </div>
@@ -776,7 +846,7 @@ async function saveServices() {
 }
 
 async function syncServices() {
-  showToast('⏳ Syncing...');
+  showToast('⏳ Syncing from both APIs...');
   try {
     const res = await api('POST', '/services/sync', {});
     showToast(`✅ Synced ${res.count} services!`);
@@ -797,10 +867,11 @@ async function showOrders() {
     container.innerHTML = orders.map(o => {
       const daysSince = (new Date() - new Date(o.createdAt)) / (1000*60*60*24);
       const canRefill = o.refillEligible && !o.refillRequested && daysSince <= 30 && o.status === 'Completed';
+      const providerBadge = o.provider === 'peaker' ? '<span class="provider-badge provider-peaker">PEAKER</span>' : '<span class="provider-badge provider-smm">SMM</span>';
       return `
         <div class="order-card">
           <div class="order-header">
-            <div class="order-id">#${o.smmOrderId || 'N/A'}</div>
+            <div class="order-id">#${o.smmOrderId || 'N/A'} ${providerBadge}</div>
             <div class="badge" style="background:${o.status==='Completed'?'#0d1f0d':o.status==='In progress'?'#0a1a2e':'#1a1a1a'};color:${o.status==='Completed'?'#34c759':o.status==='In progress'?'#0a84ff':'#888'};">${o.status}</div>
           </div>
           <div style="font-size:13px;color:#888;margin-bottom:8px;">${o.serviceName} • ${o.quantity.toLocaleString()} qty</div>

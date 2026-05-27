@@ -3,7 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
-const { Bot, InlineKeyboard } = require('grammy');
+const { Bot, InlineKeyboard, Keyboard } = require('grammy');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -23,9 +23,11 @@ for (const key of requiredEnv) {
 
 const ADMIN_IDS = process.env.ADMIN_IDS.split(',').map(id => parseInt(id.trim())).filter(Boolean);
 const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID;
-const APP_URL = process.env.APP_URL;
+const APP_URL = process.env.APP_URL || 'https://multideeps.info';
 const SMM_API_KEY = process.env.SMMFOLLOWS_API_KEY;
 const SMM_API_URL = process.env.SMMFOLLOWS_API_URL || 'https://smmfollows.com/api/v2';
+const PEAKER_API_KEY = process.env.PEAKER_API_KEY || '';
+const PEAKER_API_URL = process.env.PEAKER_API_URL || 'https://peaker.com/api/v2';
 
 // ==========================================
 // MIDDLEWARE
@@ -92,17 +94,29 @@ const merchantSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// Provider-specific option embedded in service
+const providerOptionSchema = new mongoose.Schema({
+    provider: { type: String, enum: ['smmfollows', 'peaker'] },
+    providerServiceId: Number,
+    rate: Number,
+    min: Number,
+    max: Number,
+    refill: Boolean,
+    cancel: Boolean,
+    deliveryMinutes: Number,
+    reliabilityScore: { type: Number, default: 100 }
+}, { _id: false });
+
 const serviceSchema = new mongoose.Schema({
     serviceId: { type: Number, required: true, unique: true },
     name: String,
     displayName: { type: String, default: '' },
     type: String,
     category: String,
-    rate: String,
-    min: String,
-    max: String,
-    refill: Boolean,
-    cancel: Boolean,
+    platform: String,
+    options: [providerOptionSchema],
+    banned: { type: Boolean, default: false },
+    banReason: String,
     updatedAt: { type: Date, default: Date.now }
 });
 
@@ -154,6 +168,8 @@ const orderSchema = new mongoose.Schema({
     customerUsername: String,
     customerChatId: Number,
     serviceId: Number,
+    provider: String,
+    providerServiceId: Number,
     serviceName: String,
     link: String,
     quantity: Number,
@@ -194,6 +210,8 @@ const pendingTxSchema = new mongoose.Schema({
     customerTelegramId: Number,
     customerChatId: Number,
     serviceId: Number,
+    provider: String,
+    providerServiceId: Number,
     serviceName: String,
     link: String,
     quantity: Number,
@@ -203,18 +221,27 @@ const pendingTxSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now, expires: 86400 }
 });
 
+const webSessionSchema = new mongoose.Schema({
+    sessionId: { type: String, required: true, unique: true, index: true },
+    phone: String,
+    customerName: String,
+    createdAt: { type: Date, default: Date.now, expires: 86400 }
+});
+
 const Merchant = mongoose.model('Merchant', merchantSchema);
 const Service = mongoose.model('Service', serviceSchema);
 const BotInstance = mongoose.model('BotInstance', botInstanceSchema);
 const Order = mongoose.model('Order', orderSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const PendingTransaction = mongoose.model('PendingTransaction', pendingTxSchema);
+const WebSession = mongoose.model('WebSession', webSessionSchema);
 
 // ==========================================
 // IN-MEMORY STATE
 // ==========================================
 const adminUserState = new Map();
 const customerPendingInputs = new Map();
+const webPendingInputs = new Map(); // sessionId -> state
 let defaultStore = null;
 
 // ==========================================
@@ -229,7 +256,6 @@ function escapeMarkdown(text) {
         .replace(/`/g, '\\`');
 }
 
-// Telegram inline button text limit is 64 chars; stay well under for safety
 function btnText(text, max = 58) {
     if (!text) return '...';
     return text.length > max ? text.slice(0, max - 3) + '...' : text;
@@ -295,11 +321,39 @@ function cleanServiceName(service) {
     return `${platformName} ${typeName}`.trim();
 }
 
+// Delivery time estimator
+function estimateDeliveryMinutes(serviceName, category) {
+    const text = `${serviceName || ''} ${category || ''}`.toLowerCase();
+
+    // Ultra fast
+    if (text.includes('instant') || text.includes('0-1h') || text.includes('0-1 hour') || text.includes('0-30m') || text.includes('immediate')) return 30;
+    if (text.includes('fast') || text.includes('speed') || text.includes('quick') || text.includes('rapid') || text.includes('express')) return 60;
+    if (text.includes('0-3h') || text.includes('0-3 hour') || text.includes('0-6h') || text.includes('0-6 hour') || text.includes('1-6h')) return 120;
+    if (text.includes('0-12h') || text.includes('0-12 hour') || text.includes('1-12h')) return 360;
+
+    // Medium
+    if (text.includes('1-24h') || text.includes('1-24 hour') || text.includes('24h')) return 720;
+    if (text.includes('slow') || text.includes('drip') || text.includes('gradual') || text.includes('organic')) return 2880;
+    if (text.includes('1-3 day') || text.includes('2-3 day') || text.includes('3-5 day')) return 4320;
+
+    // Default
+    return 240; // 4 hours default
+}
+
+function formatDuration(minutes) {
+    if (minutes < 60) return `~${minutes} min`;
+    if (minutes < 1440) return `~${Math.round(minutes/60)} hrs`;
+    return `~${Math.round(minutes/1440)} days`;
+}
+
 function getPlatformKeyboard(services) {
     const platforms = new Set();
     services.forEach(s => {
-        const p = detectPlatform(s);
-        if (p) platforms.add(p);
+        if (s.platform) platforms.add(s.platform);
+        else {
+            const p = detectPlatform(s);
+            if (p) platforms.add(p);
+        }
     });
     const keyboard = new InlineKeyboard();
     const platformList = Array.from(platforms);
@@ -320,7 +374,7 @@ function getPlatformKeyboard(services) {
 
 function getTypeKeyboard(services, platform) {
     const types = new Set();
-    services.filter(s => detectPlatform(s) === platform).forEach(s => types.add(detectType(s)));
+    services.filter(s => (s.platform || detectPlatform(s)) === platform).forEach(s => types.add(detectType(s)));
     const keyboard = new InlineKeyboard();
     const typeList = Array.from(types);
     const typeEmojis = {
@@ -334,19 +388,29 @@ function getTypeKeyboard(services, platform) {
 }
 
 // Pricing engine
-function calculateKESPrice(rateStr, quantity, pricingConfig) {
-    const rate = parseFloat(rateStr) || 0;
-    if (rate <= 0 || quantity <= 0) return 0;
+function calculateKESPrice(rate, quantity, pricingConfig) {
+    const r = parseFloat(rate) || 0;
+    if (r <= 0 || quantity <= 0) return 0;
     const exchangeRate = pricingConfig?.exchangeRate || 130;
     const markup = pricingConfig?.markupMultiplier || 1.5;
-    const costPer1kInKES = rate * exchangeRate;
+    const costPer1kInKES = r * exchangeRate;
     const pricePer1kInKES = costPer1kInKES * markup;
     const total = (pricePer1kInKES / 1000) * quantity;
     return Math.max(20, Math.ceil(total / 10) * 10);
 }
 
-function getTierDisplayPrice(rateStr, tierMax, pricingConfig) {
-    return calculateKESPrice(rateStr, tierMax, pricingConfig);
+function getTierDisplayPrice(rate, tierMax, pricingConfig) {
+    return calculateKESPrice(rate, tierMax, pricingConfig);
+}
+
+// Main Menu Reply Keyboard (like VIP MPESA bot)
+function getMainMenuKeyboard() {
+    return new Keyboard()
+        .text('📊 My Status').text('💎 Plans / Services').row()
+        .text('🔄 Renew Plan').text('🔍 Check Payment').row()
+        .text('💬 Support').text('👨‍💻 Developer').row()
+        .text('❓ Help / FAQ')
+        .resized();
 }
 
 function getOwnerMenu() {
@@ -360,15 +424,6 @@ function getOwnerMenu() {
         .text("💰 Pricing Config", "owner_pricing").row()
         .text("📢 Broadcast", "owner_broadcast").row()
         .text("📱 Open Dashboard", "open_dashboard");
-}
-
-function getCustomerMenu(categories, supportUrl) {
-    const keyboard = new InlineKeyboard();
-    categories.forEach(cat => {
-        keyboard.text(`📂 ${escapeMarkdown(cat)}`, `cat_${cat}`).row();
-    });
-    if (supportUrl) keyboard.row({ text: '💬 Support', url: supportUrl });
-    return keyboard;
 }
 
 async function safeEdit(ctx, text, keyboard) {
@@ -459,29 +514,22 @@ bot.catch((err) => { console.error(`Bot Error:`, err.message); });
 async function showCustomerMenu(ctx) {
     const store = await getDefaultStore();
     if (!store || store.status !== 'active') {
-        return ctx.reply("⛔ Store is currently offline. Please check back later.");
+        return ctx.reply("⛔ Store is currently offline. Please check back later.", { reply_markup: getMainMenuKeyboard() });
     }
 
     const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
     if (enabled.length === 0) {
-        const keyboard = new InlineKeyboard();
-        if (store.supportLink) keyboard.row({ text: '💬 Support', url: store.supportLink });
-        return ctx.reply("⏳ Store has no active services yet. Please check back later.", { reply_markup: keyboard });
+        return ctx.reply("⏳ Store has no active services yet. Please check back later.", { reply_markup: getMainMenuKeyboard() });
     }
 
-    const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
+    const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } });
     const keyboard = getPlatformKeyboard(services);
-    if (store.supportLink) keyboard.row({ text: '💬 Support', url: store.supportLink });
 
-    const welcomeText = store.welcomeMessage || "Welcome! Choose a platform to get started:";
+    const welcomeText = store.welcomeMessage || "Welcome! Boost your social media presence. Choose a platform to get started:";
+    const photoUrl = store.welcomePhoto || `${APP_URL}/welcome-default.jpg`;
+
     try {
-        if (store.welcomePhoto) {
-            await ctx.replyWithPhoto(store.welcomePhoto, { caption: welcomeText, reply_markup: keyboard });
-        } else if (store.bannerImage) {
-            await ctx.replyWithPhoto(store.bannerImage, { caption: welcomeText, reply_markup: keyboard });
-        } else {
-            await ctx.reply(welcomeText, { reply_markup: keyboard });
-        }
+        await ctx.replyWithPhoto(photoUrl, { caption: welcomeText, reply_markup: keyboard });
     } catch (err) {
         console.error('[showCustomerMenu] Photo send failed:', err.message);
         await ctx.reply(welcomeText, { reply_markup: keyboard });
@@ -512,10 +560,95 @@ Manage your store, view orders, and configure services below.`;
         return;
     }
 
-    return showCustomerMenu(ctx);
+    // Send welcome with main menu keyboard
+    const store = await getDefaultStore();
+    const welcomeText = store?.welcomeMessage || "🚀 *Welcome to Multi Social Deeps!*\n\nBoost your social media presence with real engagement.\n\nChoose an option below or tap 💎 Plans to browse services.";
+    const photoUrl = store?.welcomePhoto || `${APP_URL}/welcome-default.jpg`;
+
+    try {
+        await ctx.replyWithPhoto(photoUrl, { 
+            caption: welcomeText, 
+            parse_mode: "Markdown",
+            reply_markup: getMainMenuKeyboard()
+        });
+    } catch (e) {
+        await ctx.reply(welcomeText, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+    }
 }
 
 bot.command("start", handleStart);
+
+// Handle main menu text commands
+bot.hears(['📊 My Status', '/status'], async (ctx) => {
+    const orders = await Order.find({ customerTelegramId: ctx.from.id }).sort({ createdAt: -1 }).limit(10);
+    if (orders.length === 0) {
+        return ctx.reply("📭 You have no orders yet.\n\nTap 💎 Plans to get started!", { reply_markup: getMainMenuKeyboard() });
+    }
+    let text = `📊 *Your Order Status*\n\n`;
+    orders.forEach((o, i) => {
+        text += `${i+1}. #${o.smmOrderId || 'N/A'} — ${escapeMarkdown(o.serviceName)}\n   Status: *${o.status}* | Qty: ${o.quantity.toLocaleString()}\n\n`;
+    });
+    const keyboard = new InlineKeyboard();
+    orders.slice(0, 5).forEach(o => {
+        keyboard.text(`🔄 Refresh #${o.smmOrderId?.slice(-6) || 'N/A'}`, `status_${o.smmOrderId}`).row();
+    });
+    keyboard.text('🔙 Main Menu', 'back_start');
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
+});
+
+bot.hears(['💎 Plans / Services', '/plans'], async (ctx) => {
+    return showCustomerMenu(ctx);
+});
+
+bot.hears(['🔄 Renew Plan', '/renew'], async (ctx) => {
+    await ctx.reply("🔄 *Renew Plan*\n\nThis feature is coming soon!\n\nFor now, simply browse services and place a new order.", { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+});
+
+bot.hears(['🔍 Check Payment', '/checkpayment'], async (ctx) => {
+    const pending = await PendingTransaction.find({ customerTelegramId: ctx.from.id, status: 'pending' }).sort({ createdAt: -1 }).limit(5);
+    if (pending.length === 0) {
+        return ctx.reply("✅ No pending payments found.\n\nIf you just paid, please wait 1-2 minutes for confirmation.", { reply_markup: getMainMenuKeyboard() });
+    }
+    let text = `🔍 *Pending Payments*\n\n`;
+    pending.forEach(p => {
+        text += `• Ref: \`${p.reference}\`\n  Amount: KES ${p.amount}\n  Status: ⏳ Pending\n\n`;
+    });
+    text += "_If you completed the M-Pesa prompt, your order will process automatically._";
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+});
+
+bot.hears(['💬 Support', '/support'], async (ctx) => {
+    const store = await getDefaultStore();
+    if (store?.supportLink) {
+        await ctx.reply("💬 *Support*\n\nClick below to chat with our support team:", {
+            parse_mode: "Markdown",
+            reply_markup: new InlineKeyboard().row({ text: '💬 Open Support Chat', url: store.supportLink })
+        });
+    } else {
+        await ctx.reply("💬 *Support*\n\nPlease contact the admin for assistance.", { reply_markup: getMainMenuKeyboard() });
+    }
+});
+
+bot.hears(['👨‍💻 Developer', '/developer'], async (ctx) => {
+    await ctx.reply("👨‍💻 *Developer*\n\nBot powered by Multi Social Deeps 🚀\nBuilt for fast, reliable social media growth.", { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+});
+
+bot.hears(['❓ Help / FAQ', '/help'], async (ctx) => {
+    const text = `❓ *Help & FAQ*\n\n` +
+        `*How does it work?*\n` +
+        `1️⃣ Choose your platform (Instagram, TikTok, etc.)\n` +
+        `2️⃣ Select service type (Followers, Likes, Views)\n` +
+        `3️⃣ Pick a speed option (Fast or Standard)\n` +
+        `4️⃣ Enter your link and quantity\n` +
+        `5️⃣ Pay via M-Pesa\n` +
+        `6️⃣ Watch your numbers grow!\n\n` +
+        `*Delivery Times:*\n` +
+        `• Fast options: ~30 min — 2 hrs\n` +
+        `• Standard: ~2 — 12 hrs\n` +
+        `• Large orders: Up to 24 hrs\n\n` +
+        `*Need help?* Tap 💬 Support`;
+    await ctx.reply(text, { parse_mode: "Markdown", reply_markup: getMainMenuKeyboard() });
+});
 
 bot.command("owner", async (ctx) => {
     if (!ADMIN_IDS.includes(ctx.from.id)) return ctx.reply("⛔ Owner only.");
@@ -552,7 +685,7 @@ bot.on('callback_query:data', async (ctx) => {
         const smmOrderId = data.replace('status_', '');
         const order = await Order.findOne({ smmOrderId, customerTelegramId: userId });
         if (!order) {
-            await ctx.reply("❌ Order not found. It may have been placed from another account.");
+            await ctx.reply("❌ Order not found.");
             return;
         }
 
@@ -562,7 +695,9 @@ bot.on('callback_query:data', async (ctx) => {
             `🔗 ${escapeMarkdown(order.link)}\n\n`;
 
         try {
-            const res = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'status', order: smmOrderId }, { timeout: 30000 });
+            const apiUrl = order.provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
+            const apiKey = order.provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
+            const res = await axios.post(apiUrl, { key: apiKey, action: 'status', order: smmOrderId }, { timeout: 30000 });
             const d = res.data;
             if (d && d.status) {
                 order.status = d.status;
@@ -729,8 +864,8 @@ bot.on('callback_query:data', async (ctx) => {
     if (data.startsWith('plat_')) {
         const platform = data.replace('plat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
-        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
-        const platformServices = services.filter(s => detectPlatform(s) === platform);
+        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } });
+        const platformServices = services.filter(s => (s.platform || detectPlatform(s)) === platform);
         if (platformServices.length === 0) {
             return ctx.reply("❌ No services available for this platform right now.");
         }
@@ -748,8 +883,8 @@ bot.on('callback_query:data', async (ctx) => {
         const platform = parts[0];
         const type = parts[1];
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
-        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) } });
-        const filtered = services.filter(s => detectPlatform(s) === platform && detectType(s) === type);
+        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } });
+        const filtered = services.filter(s => (s.platform || detectPlatform(s)) === platform && detectType(s) === type);
         if (filtered.length === 0) return ctx.reply("❌ No services found.");
 
         const keyboard = new InlineKeyboard();
@@ -757,8 +892,10 @@ bot.on('callback_query:data', async (ctx) => {
 
         for (const s of filtered) {
             const displayName = s.displayName || cleanServiceName(s);
-            const tier = cfg.tiers?.[0];
-            const startPrice = tier ? getTierDisplayPrice(s.rate, tier.maxQty, cfg) : '??';
+            // Show each provider option
+            const options = s.options || [];
+            const bestOption = options.sort((a,b) => a.rate - b.rate)[0];
+            const startPrice = bestOption ? getTierDisplayPrice(bestOption.rate, (cfg.tiers?.[0]?.maxQty || 500), cfg) : '??';
             const rawLabel = `${displayName} | KES ${startPrice}`;
             keyboard.text(btnText(rawLabel), `svc_${s.serviceId}`).row();
         }
@@ -766,7 +903,7 @@ bot.on('callback_query:data', async (ctx) => {
 
         const typeEmojis = { followers: '👥', subscribers: '🔔', members: '👥', views: '👁️', likes: '❤️', comments: '💬', other: '🔧' };
         await ctx.reply(
-            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + type.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
+            `${typeEmojis[type] || '🔧'} *${type.charAt(0).toUpperCase() + t.slice(1)}* — ${PLATFORM_META[platform]?.name || platform}\n\nSelect a package:`,
             { parse_mode: "Markdown", reply_markup: keyboard }
         );
         return;
@@ -781,50 +918,77 @@ bot.on('callback_query:data', async (ctx) => {
         const tiers = cfg.tiers || [];
         const keyboard = new InlineKeyboard();
         const displayName = svc.displayName || cleanServiceName(svc);
+        const options = svc.options || [];
 
-        for (const tier of tiers) {
-            const price = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
-            const rawLabel = `${tier.label} • KES ${price}`;
-            keyboard.text(btnText(rawLabel), `tier_${serviceId}_${tier.label.replace(/[^a-zA-Z0-9]/g,'')}`).row();
-        }
-        keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
-
+        // Build option list with pricing and delivery estimates
         let text = `🛒 *${escapeMarkdown(displayName)}*\n\n`;
-        text += `Min: ${svc.min} | Max: ${svc.max}\n`;
-        text += `Refill: ${svc.refill ? '✅ Yes (30 days)' : '❌ No'}\n\n`;
-        text += `*Select your quantity tier:*\n`;
-        tiers.forEach(t => {
-            text += `• ${t.label}: ${t.minQty.toLocaleString()}-${t.maxQty.toLocaleString()} qty\n`;
+        text += `Choose your preferred speed & price:\n\n`;
+
+        options.forEach((opt, idx) => {
+            const price = getTierDisplayPrice(opt.rate, (tiers[0]?.maxQty || 500), cfg);
+            const duration = formatDuration(opt.deliveryMinutes);
+            const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
+
+            text += `${idx+1}. ${speedLabel}\n`;
+            text += `   KES ${price} per ${tiers[0]?.maxQty || 500} qty\n`;
+            text += `   Delivery: ${duration}\n`;
+            text += `   Min: ${opt.min} | Max: ${opt.max}\n\n`;
+
+            const btnLabel = `${speedLabel} | KES ${price} | ${duration}`;
+            keyboard.text(btnText(btnLabel), `opt_${serviceId}_${idx}`).row();
         });
+
+        text += `*All options include refill guarantee where available.*\n`;
+        text += `⏳ Delivery times are estimates and may vary by platform load.`;
+
+        keyboard.text('🔙 Back to Types', `type_${detectPlatform(svc)}_${detectType(svc)}`);
 
         await ctx.reply(text, { parse_mode: "Markdown", reply_markup: keyboard });
         return;
     }
 
-    if (data.startsWith('tier_')) {
-        const match = data.match(/tier_(\d+)_(.+)/);
+    if (data.startsWith('opt_')) {
+        const match = data.match(/opt_(\d+)_(\d+)/);
         if (!match) return;
         const serviceId = parseInt(match[1]);
-        const tierLabel = match[2];
+        const optionIdx = parseInt(match[2]);
         const svc = await Service.findOne({ serviceId });
         if (!svc) return ctx.reply("❌ Service not found.");
 
+        const options = svc.options || [];
+        const selectedOpt = options[optionIdx];
+        if (!selectedOpt) return ctx.reply("❌ Option not found.");
+
         const cfg = store.pricingConfig || {};
         const tiers = cfg.tiers || [];
-        const tier = tiers.find(t => t.label.replace(/[^a-zA-Z0-9]/g,'') === tierLabel);
-        if (!tier) return ctx.reply("❌ Tier not found.");
-
         const displayName = svc.displayName || cleanServiceName(svc);
+        const tier = tiers[0]; // Default to first tier for selection
 
         customerPendingInputs.set(userId, {
-            action: 'awaiting_qty_in_tier',
-            data: { serviceId, tier, serviceName: displayName, platform: detectPlatform(svc), type: detectType(svc), rate: svc.rate, min: svc.min, max: svc.max }
+            action: 'awaiting_qty_for_option',
+            data: { 
+                serviceId, 
+                optionIdx,
+                provider: selectedOpt.provider,
+                providerServiceId: selectedOpt.providerServiceId,
+                serviceName: displayName, 
+                platform: detectPlatform(svc), 
+                type: detectType(svc), 
+                rate: selectedOpt.rate, 
+                min: selectedOpt.min, 
+                max: selectedOpt.max,
+                deliveryMinutes: selectedOpt.deliveryMinutes,
+                refill: selectedOpt.refill
+            }
         });
 
-        const priceForMax = getTierDisplayPrice(svc.rate, tier.maxQty, cfg);
+        const priceForMax = getTierDisplayPrice(selectedOpt.rate, tier.maxQty, cfg);
+        const duration = formatDuration(selectedOpt.deliveryMinutes);
+
         await ctx.reply(
-            `${tier.label} selected ✅\n\n` +
-            `Enter exact quantity between *${tier.minQty.toLocaleString()}* and *${tier.maxQty.toLocaleString()}*\n\n` +
+            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected\n\n` +
+            `Estimated delivery: *${duration}*\n\n` +
+            `Enter exact quantity between *${selectedOpt.min.toLocaleString()}* and *${selectedOpt.max.toLocaleString()}*\n\n` +
             `_Price for ${tier.maxQty.toLocaleString()} qty = KES ${priceForMax}_\n` +
             `_Price scales proportionally with quantity_`,
             { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
@@ -835,7 +999,7 @@ bot.on('callback_query:data', async (ctx) => {
     if (data.startsWith('cat_')) {
         const category = data.replace('cat_', '');
         const enabled = store.enabledServices?.filter(s => s.isEnabled) || [];
-        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, category });
+        const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, category, banned: { $ne: true } });
         if (services.length === 0) return ctx.reply("❌ No services in this category.");
 
         const keyboard = new InlineKeyboard();
@@ -928,34 +1092,35 @@ bot.on('message:text', async (ctx) => {
     }
 
     if (customerState) {
-        if (customerState.action === 'awaiting_qty_in_tier') {
+        if (customerState.action === 'awaiting_qty_for_option') {
             const qty = parseInt(ctx.message.text.trim().replace(/,/g, ''));
-            const { serviceId, tier, serviceName, rate, min, max } = customerState.data;
+            const { serviceId, optionIdx, provider, providerServiceId, serviceName, rate, min, max, deliveryMinutes, refill } = customerState.data;
             const svcMin = parseInt(min) || 100;
             const svcMax = parseInt(max) || 100000;
 
-            if (isNaN(qty) || qty < tier.minQty || qty > tier.maxQty || qty < svcMin || qty > svcMax) {
+            if (isNaN(qty) || qty < svcMin || qty > svcMax) {
                 await ctx.reply(
                     `❌ Invalid quantity.\n\n` +
-                    `• Tier range: *${tier.minQty.toLocaleString()} - ${tier.maxQty.toLocaleString()}*\n` +
-                    `• Service limits: ${svcMin} - ${svcMax}\n\nPlease enter a valid quantity:`,
+                    `• Service limits: ${svcMin.toLocaleString()} - ${svcMax.toLocaleString()}\n\nPlease enter a valid quantity:`,
                     { parse_mode: "Markdown" }
                 );
                 return;
             }
 
             const cfg = store.pricingConfig || {};
-            const tierMultiplier = tier.multiplier || 1.0;
             const basePrice = calculateKESPrice(rate, qty, cfg);
-            const adjustedPrice = Math.max(20, Math.ceil(basePrice * tierMultiplier / 10) * 10);
+            const adjustedPrice = Math.max(20, Math.ceil(basePrice / 10) * 10);
 
             customerState.data.quantity = qty;
             customerState.data.price = adjustedPrice;
             customerState.action = 'awaiting_link';
 
+            const duration = formatDuration(deliveryMinutes);
+
             await ctx.reply(
                 `✅ *Quantity: ${qty.toLocaleString()}*\n` +
-                `💰 *Price: KES ${adjustedPrice}*\n\n` +
+                `💰 *Price: KES ${adjustedPrice}*\n` +
+                `⏱️ *Delivery: ${duration}*\n\n` +
                 `Now send the link or username to promote:\n` +
                 `_Examples:_\n` +
                 `• Instagram: \`https://instagram.com/username\`\n` +
@@ -970,15 +1135,18 @@ bot.on('message:text', async (ctx) => {
         if (customerState.action === 'awaiting_link') {
             customerState.data.link = ctx.message.text.trim();
             customerState.action = 'awaiting_payment_confirm';
-            const { serviceName, quantity, price, link } = customerState.data;
+            const { serviceName, quantity, price, link, deliveryMinutes, refill } = customerState.data;
+            const duration = formatDuration(deliveryMinutes);
 
             await ctx.reply(
                 `📋 *ORDER SUMMARY*\n\n` +
                 `🛒 Service: ${escapeMarkdown(serviceName)}\n` +
                 `🔗 Link: ${escapeMarkdown(link)}\n` +
                 `📊 Quantity: ${quantity.toLocaleString()}\n` +
-                `💰 Total: *KES ${price}*\n\n` +
-                `⏳ *Delivery Notice:* Orders typically start within minutes. Larger quantities may take up to 24 hours depending on the platform.\n\n` +
+                `💰 Total: *KES ${price}*\n` +
+                `⏱️ Delivery: *${duration}*\n\n` +
+                `${refill ? '🔄 *Refill guarantee included*\n\n' : ''}` +
+                `⏳ *Delivery Notice:* Orders typically start within minutes. Delivery time depends on quantity and platform load.\n\n` +
                 `Tap *PROCEED TO PAY* to continue 👇`,
                 {
                     parse_mode: "Markdown",
@@ -996,7 +1164,7 @@ bot.on('message:text', async (ctx) => {
             else if (!phone.startsWith('254')) phone = '254' + phone;
             if (phone.length !== 12) { await ctx.reply("❌ Invalid phone. Use format: 07XXXXXXXX"); return; }
 
-            const { serviceId, serviceName, link, quantity, price } = customerState.data;
+            const { serviceId, provider, providerServiceId, serviceName, link, quantity, price } = customerState.data;
             const reference = `ORD${Date.now()}`;
 
             const freshStore = await getDefaultStore(true);
@@ -1010,7 +1178,7 @@ bot.on('message:text', async (ctx) => {
                 await PendingTransaction.create({
                     reference, type: 'order', phone, amount: price, botId: freshStore._id,
                     customerTelegramId: ctx.from.id, customerChatId: ctx.chat.id,
-                    serviceId, serviceName, link, quantity
+                    serviceId, provider, providerServiceId, serviceName, link, quantity
                 });
 
                 const payload = {
@@ -1105,12 +1273,17 @@ async function handleMegapayWebhook(req, res) {
             const svc = await Service.findOne({ serviceId: tx.serviceId });
             const displayName = svc?.displayName || cleanServiceName(svc) || tx.serviceName || 'Unknown';
 
+            const provider = tx.provider || 'smmfollows';
+            const providerServiceId = tx.providerServiceId || tx.serviceId;
+            const apiUrl = provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
+            const apiKey = provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
+
             let smmOrderId = null;
             try {
-                const smmRes = await axios.post(SMM_API_URL, {
-                    key: SMM_API_KEY,
+                const smmRes = await axios.post(apiUrl, {
+                    key: apiKey,
                     action: 'add',
-                    service: tx.serviceId,
+                    service: providerServiceId,
                     link: tx.link,
                     quantity: tx.quantity
                 }, { timeout: 30000 });
@@ -1129,13 +1302,15 @@ async function handleMegapayWebhook(req, res) {
                 customerTelegramId: tx.customerTelegramId,
                 customerChatId: tx.customerChatId,
                 serviceId: tx.serviceId,
+                provider,
+                providerServiceId,
                 serviceName: displayName,
                 link: tx.link,
                 quantity: tx.quantity,
                 price: amount,
                 smmOrderId: smmOrderId || 'PENDING',
                 status: smmOrderId ? 'processing' : 'pending',
-                refillEligible: svc?.refill || false
+                refillEligible: svc?.options?.some(o => o.refill) || false
             });
 
             await Transaction.create({
@@ -1216,448 +1391,273 @@ app.get('/api/me', validateInitData, async (req, res) => {
 });
 
 app.get('/api/services', validateInitData, async (req, res) => {
-    const services = await Service.find().sort({ category: 1, serviceId: 1 });
+    const services = await Service.find({ banned: { $ne: true } }).sort({ category: 1, serviceId: 1 });
     res.json(services);
 });
 
 // ==========================================
-// SMART SYNC — DEDUPLICATE + SCORE BY SPEED/PROFIT
+// DUAL API SYNC
 // ==========================================
+const BANNED_SERVICES = [
+    'nigeria', 'nigerian', '🇳🇬', 'brazil', 'brazilian', '🇧🇷', 'india', 'indian', '🇮🇳',
+    'russia', 'russian', '🇷🇺', 'ukraine', 'ukrainian', '🇺🇦', 'usa', 'american', 'united states', '🇺🇸',
+    'turkey', 'turkish', '🇹🇷', 'france', 'french', '🇫🇷', 'china', 'chinese', '🇨🇳',
+    'japan', 'japanese', '🇯🇵', 'korea', 'korean', '🇰🇷', 'vietnam', 'vietnamese', '🇻🇳',
+    'bangladesh', 'indonesia', 'italy', 'italian', 'pakistan', 'pakistani', 'philippines', 'filipino',
+    'saudi', 'arabia', 'taiwan', 'thailand', 'uae', 'emirates', 'germany', 'german', 'uk', 'british',
+    'spain', 'spanish', 'mexico', 'mexican', 'canada', 'canadian', 'europe', 'european', 'africa', 'asia',
+    'shares', 'saves', 'bookmarks', 'retweets', 'impressions', 'poll', 'vote', 'space listeners',
+    'trend topic', 'dislikes', 'mass dm', 'bot start', 'boost channel', 'reactions', 'comments likes',
+    'comments replay', 'social shares', 'live stream', 'livestream', 'premiere', 'watchtime',
+    'watch hours', 'seo', 'adwords', 'monetization', 'monetizable', 'organic discovery', 'keyword',
+    'retention', 'ctr', 'concurrent', 'pk battle', 'auto post', 'auto likes', 'auto views', 'emergency',
+    'nft', 'gradual tweet', 'interactions', 'other service', 'packages', 'mix seo', 'premium members',
+    'premium views', 'shorts', 'community', 'extended', 'native ads', 'rav', 'apv', 'gs', 'mts', 'mms',
+    'by gender', 'by niche', 'by retention', 'from referrer', 'search engine', 'shopping', 'forum',
+    'news', 'social media', 'by keywords', 'by topic', 'suggest by ai', 'created by ai', 'powerd by ai',
+    'ai generated', 'ai smart', 'auto future', 'discussion', 'search ranking', 'online accounts',
+    'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone',
+    'spotify', 'soundcloud', 'twitch', 'linkedin', 'pinterest', 'tumblr', 'vk', 'ok.ru',
+    'discord', 'clubhouse', 'kwai', 'likee', 'bigolive', 'trovo', 'dlive', 'vimeo',
+    'dailymotion', 'rumble', 'odysee', 'bitchute', 'brighteon', 'bilibili', 'weibo',
+    'line', 'kakao', 'naver', 'zalo', 'viber', 'wechat', 'qq',
+    'onlyfans', 'fansly', 'patreon', 'cameo', 'gofundme', 'kickstarter',
+    'trustpilot', 'sitejabber', 'yelp', 'google maps', 'google review',
+    'app install', 'app rating', 'app review', 'ios', 'android', 'apk',
+    'website', 'web traffic', 'direct traffic', 'referral', 'bounce',
+    'alexa', 'domain', 'backlink', 'guest post', 'press release',
+    'coinmarketcap', 'coingecko', 'crypto', 'token', 'nft drop',
+    'minecraft', 'roblox', 'steam', 'epic games', 'origin', 'uplay',
+    'playstation', 'xbox', 'nintendo', 'game', 'gaming',
+    'quora', 'medium', 'substack', 'ghost', 'wordpress', 'blogger',
+    'behance', 'dribbble', 'deviantart', 'artstation', 'pixiv',
+    'fiverr', 'upwork', 'freelancer', 'peopleperhour',
+    'shopee', 'lazada', 'amazon review', 'ebay feedback', 'etsy',
+    'alibaba', 'aliexpress', 'daraz', 'jumia', 'konga', 'olx',
+    'netflix', 'hulu', 'disney', 'hbo', 'prime video', 'apple tv',
+    'only fans', 'fansly', 'justforfans', 'manyvids', 'avn stars',
+    // Known broken services
+    'fb comment', 'facebook comment', 'comment facebook', 'comments facebook',
+    'fb group', 'facebook group', 'group member', 'fb members',
+    'instagram comment', 'ig comment', 'twitter comment', 'tweet comment'
+];
+
+function isBanned(text) {
+    const t = text.toLowerCase();
+    return BANNED_SERVICES.some(b => t.includes(b));
+}
+
+function scoreService(s) {
+    const text = `${s.name || ''} ${s.category || ''}`.toLowerCase();
+    let score = 0;
+    const rate = parseFloat(s.rate) || 999;
+    const minQty = parseInt(s.min) || 999999;
+    const maxQty = parseInt(s.max) || 0;
+
+    if (rate < 0.3) score += 30;
+    else if (rate < 0.6) score += 20;
+    else if (rate < 1.0) score += 15;
+    else if (rate < 1.5) score += 10;
+    else if (rate < 2.0) score += 5;
+    else if (rate > 5.0) score -= 15;
+    else if (rate > 10.0) score -= 30;
+    else if (rate > 20.0) score -= 50;
+
+    if (maxQty >= 50000) score += 10;
+    else if (maxQty >= 10000) score += 7;
+    else if (maxQty >= 5000) score += 5;
+    else if (maxQty >= 1000) score += 3;
+    else if (maxQty < 500) score -= 5;
+
+    if (minQty <= 10) score += 10;
+    else if (minQty <= 50) score += 7;
+    else if (minQty <= 100) score += 5;
+    else if (minQty <= 500) score += 2;
+    else if (minQty > 1000) score -= 10;
+
+    if (text.includes('refill')) score += 8;
+    if (text.includes('non drop')) score += 8;
+    if (text.includes('no drop')) score += 8;
+    if (text.includes('real')) score += 3;
+    if (text.includes('active')) score += 3;
+
+    if (text.includes('bot')) score -= 5;
+    if (text.includes('fake')) score -= 10;
+    if (text.includes('proxy')) score -= 5;
+    if (text.includes('cracked')) score -= 20;
+    if (text.includes('hacked')) score -= 30;
+
+    return score;
+}
+
+async function fetchProviderServices(apiUrl, apiKey, providerName) {
+    try {
+        const res = await axios.post(apiUrl, { key: apiKey, action: 'services' }, { timeout: 60000 });
+        if (!Array.isArray(res.data)) return [];
+        return res.data.map(s => ({
+            provider: providerName,
+            providerServiceId: Number(s.service),
+            name: s.name,
+            category: s.category,
+            type: s.type,
+            rate: parseFloat(s.rate) || 0,
+            min: parseInt(s.min) || 0,
+            max: parseInt(s.max) || 0,
+            refill: !!s.refill,
+            cancel: !!s.cancel,
+            deliveryMinutes: estimateDeliveryMinutes(s.name, s.category),
+            score: scoreService(s)
+        }));
+    } catch (e) {
+        console.error(`[SYNC] ${providerName} fetch failed:`, e.message);
+        return [];
+    }
+}
+
 app.post('/api/services/sync', validateInitData, async (req, res) => {
     if (!ADMIN_IDS.includes(req.telegramUser.id)) return res.status(403).json({ error: 'Forbidden' });
     try {
-        const response = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'services' }, { timeout: 60000 });
-        let services = response.data;
-        if (!Array.isArray(services)) return res.status(400).json({ error: 'Invalid API response' });
-
         const platforms = ['twitter', 'facebook', 'tiktok', 'instagram', 'youtube', 'telegram', 'reddit', 'snapchat', 'whatsapp'];
         const actions = ['followers', 'subscribers', 'members', 'views', 'likes', 'comments'];
 
-        // Hard ban list — anything matching these is rejected entirely
-        const banned = [
-            'nigeria', 'nigerian', '🇳🇬', 'brazil', 'brazilian', '🇧🇷', 'india', 'indian', '🇮🇳',
-            'russia', 'russian', '🇷🇺', 'ukraine', 'ukrainian', '🇺🇦', 'usa', 'american', 'united states', '🇺🇸',
-            'turkey', 'turkish', '🇹🇷', 'france', 'french', '🇫🇷', 'china', 'chinese', '🇨🇳',
-            'japan', 'japanese', '🇯🇵', 'korea', 'korean', '🇰🇷', 'vietnam', 'vietnamese', '🇻🇳',
-            'bangladesh', 'indonesia', 'italy', 'italian', 'pakistan', 'pakistani', 'philippines', 'filipino',
-            'saudi', 'arabia', 'taiwan', 'thailand', 'uae', 'emirates', 'germany', 'german', 'uk', 'british',
-            'spain', 'spanish', 'mexico', 'mexican', 'canada', 'canadian', 'europe', 'european', 'africa', 'asia',
-            'shares', 'saves', 'bookmarks', 'retweets', 'impressions', 'poll', 'vote', 'space listeners',
-            'trend topic', 'dislikes', 'mass dm', 'bot start', 'boost channel', 'reactions', 'comments likes',
-            'comments replay', 'social shares', 'live stream', 'livestream', 'premiere', 'watchtime',
-            'watch hours', 'seo', 'adwords', 'monetization', 'monetizable', 'organic discovery', 'keyword',
-            'retention', 'ctr', 'concurrent', 'pk battle', 'auto post', 'auto likes', 'auto views', 'emergency',
-            'nft', 'gradual tweet', 'interactions', 'other service', 'packages', 'mix seo', 'premium members',
-            'premium views', 'shorts', 'community', 'extended', 'native ads', 'rav', 'apv', 'gs', 'mts', 'mms',
-            'by gender', 'by niche', 'by retention', 'from referrer', 'search engine', 'shopping', 'forum',
-            'news', 'social media', 'by keywords', 'by topic', 'suggest by ai', 'created by ai', 'powerd by ai',
-            'ai generated', 'ai smart', 'auto future', 'discussion', 'search ranking', 'online accounts',
-            'join from search', 'views from followers', 'paid reactions', 'post shares', 'votes', 'clone',
-            'spotify', 'soundcloud', 'twitch', 'linkedin', 'pinterest', 'tumblr', 'vk', 'ok.ru',
-            'discord', 'clubhouse', 'kwai', 'likee', 'bigolive', 'trovo', 'dlive', 'vimeo',
-            'dailymotion', 'rumble', 'odysee', 'bitchute', 'brighteon', 'bilibili', 'weibo',
-            'line', 'kakao', 'naver', 'zalo', 'viber', 'wechat', 'qq',
-            'onlyfans', 'fansly', 'patreon', 'cameo', 'gofundme', 'kickstarter',
-            'trustpilot', 'sitejabber', 'yelp', 'google maps', 'google review',
-            'app install', 'app rating', 'app review', 'ios', 'android', 'apk',
-            'website', 'web traffic', 'direct traffic', 'referral', 'bounce',
-            'alexa', 'domain', 'backlink', 'guest post', 'press release',
-            'coinmarketcap', 'coingecko', 'crypto', 'token', 'nft drop',
-            'minecraft', 'roblox', 'steam', 'epic games', 'origin', 'uplay',
-            'playstation', 'xbox', 'nintendo', 'game', 'gaming',
-            'quora', 'medium', 'substack', 'ghost', 'wordpress', 'blogger',
-            'behance', 'dribbble', 'deviantart', 'artstation', 'pixiv',
-            'fiverr', 'upwork', 'freelancer', 'peopleperhour',
-            'shopee', 'lazada', 'amazon review', 'ebay feedback', 'etsy',
-            'alibaba', 'aliexpress', 'daraz', 'jumia', 'konga', 'olx',
-            'netflix', 'hulu', 'disney', 'hbo', 'prime video', 'apple tv',
-            'only fans', 'fansly', 'justforfans', 'manyvids', 'avn stars'
-        ];
+        // Fetch from both APIs
+        const smmServices = await fetchProviderServices(SMM_API_URL, SMM_API_KEY, 'smmfollows');
+        const peakerServices = PEAKER_API_KEY ? await fetchProviderServices(PEAKER_API_URL, PEAKER_API_KEY, 'peaker') : [];
 
-        // Words to strip from display names
-        const noiseWords = [
-            '100% active real', '100% real humans', 'active real', 'real humans', 'real', 'active',
-            'hq', 'high quality', 'cheapest', 'cheap', 'fast', 'speed', 'stable', 'new', 'online',
-            'instant', 'quick', 'super', 'ultra', 'premium', 'best', 'top', 'guaranteed', 'guranteed',
-            'non drop', 'no drop', 'drop', 'lifetime', 'permanent', 'organic', 'natural',
-            'worldwide', 'global', 'international', 'mixed', 'random', 'targeted', 'naked',
-            'start', '0-1 hour', '0-12 hour', '1-24 hour', 'up to', 'within', 'delivery',
-            'daily', 'instantly', 'auto', 'gradual', 'drip feed', 'slow', 'normal', 'express',
-            'extra', 'bonus', 'free', 'gift', 'trial', 'test', 'sample', 'demo',
-            ' refill', 'refill', 'refillable', '30 days', '90 days', '180 days',
-            'working', 'functioning', 'operational', 'updated', 'latest', 'version',
-            'server', 'panel', 'api', 'smm', 'reseller', 'provider', 'supplier',
-            'max', 'min', 'minimum', 'maximum', 'limit', 'range', 'qty', 'quantity',
-            'per day', 'per hour', 'per minute', 'per second', 'hourly', 'daily',
-            'source', 'method', 'type', 'category', 'class', 'tier', 'level',
-            'bot', 'script', 'software', 'tool', 'program', 'app', 'botting',
-            'male', 'female', 'gender', 'age', 'demographic', 'niche', 'interest',
-            'arab', 'african', 'asian', 'european', 'american', 'latin',
-            'english', 'spanish', 'french', 'german', 'russian', 'chinese',
-            'arabic', 'hindi', 'portuguese', 'japanese', 'korean', 'turkish',
-            'usa', 'uk', 'ca', 'au', 'eu', 'asia', 'africa', 'latam',
-            'old', 'aged', 'fresh', 'newly created', 'pva', 'phone verified',
-            'non pva', 'email verified', 'verified', 'unverified', 'blank',
-            'profile pic', 'bio', 'posts', 'story', 'highlight', 'reel',
-            'private', 'public', 'open', 'closed', 'secret', 'hidden',
-            'group', 'channel', 'page', 'account', 'profile', 'user',
-            'custom', 'personalized', 'tailored', 'bespoke', 'unique',
-            'high', 'low', 'medium', 'standard', 'basic', 'advanced', 'pro',
-            'vip', 'elite', 'exclusive', 'premium', 'gold', 'silver', 'bronze',
-            'starter', 'beginner', 'intermediate', 'expert', 'master', 'legend',
-            'package', 'bundle', 'combo', 'deal', 'offer', 'promo', 'sale',
-            'discount', 'special', 'limited', 'flash', 'mega', 'super', 'hyper',
-            'ultra', 'extreme', 'ultimate', 'supreme', 'max', 'plus', 'extra',
-            'lite', 'mini', 'micro', 'nano', 'small', 'medium', 'large', 'xl',
-            '1k', '2k', '5k', '10k', '50k', '100k', '1m', 'per 1k', 'per 1000',
-            '₹', '$', '€', '£', '¥', 'usd', 'eur', 'gbp', 'inr', 'idr', 'rub',
-            'just', 'only', 'merely', 'simply', 'purely', 'exactly', 'precisely',
-            'about', 'around', 'approximately', 'roughly', 'nearly', 'almost',
-            'more than', 'less than', 'over', 'under', 'below', 'above',
-            'from', 'to', 'between', 'and', 'or', 'with', 'without', 'plus',
-            'including', 'excluding', 'except', 'besides', 'apart from',
-            'guaranteed', 'warranty', 'assured', 'certified', 'licensed',
-            'official', 'unofficial', 'original', 'copy', 'clone', 'duplicate',
-            'faux', 'fake', 'imitation', 'replica', 'simulated', 'synthetic',
-            'authentic', 'genuine', 'legit', 'real', 'true', 'actual', 'original',
-            'replacement', 'substitute', 'alternative', 'option', 'choice',
-            'variant', 'variation', 'edition', 'version', 'model', 'series',
-            'generation', 'batch', 'lot', 'set', 'collection', 'assortment',
-            'mix', 'mixed', 'combo', 'combined', 'blended', 'fusion', 'hybrid',
-            'random', ' assorted', 'diverse', 'varied', 'different', 'various',
-            'multiple', 'many', 'numerous', 'several', 'few', 'some', 'all',
-            'each', 'every', 'any', 'some', 'no', 'not', 'none', 'never',
-            'always', 'often', 'sometimes', 'usually', 'rarely', 'seldom',
-            'frequently', 'occasionally', 'regularly', 'daily', 'weekly',
-            'monthly', 'yearly', 'hourly', 'minute', 'second', 'moment',
-            'instant', 'immediate', 'now', 'today', 'tonight', 'tomorrow',
-            'yesterday', 'soon', 'later', 'eventually', 'finally', 'ultimately',
-            'first', 'last', 'next', 'previous', 'former', 'latter', 'current',
-            'past', 'future', 'present', 'recent', 'latest', 'newest', 'oldest',
-            'modern', 'ancient', 'old', 'young', 'new', 'fresh', 'stale',
-            'good', 'bad', 'better', 'worse', 'best', 'worst', 'great',
-            'excellent', 'amazing', 'awesome', 'fantastic', 'wonderful',
-            'terrible', 'awful', 'horrible', 'disgusting', 'pathetic',
-            'nice', 'fine', 'okay', 'decent', 'acceptable', 'satisfactory',
-            'perfect', 'ideal', 'optimal', 'suitable', 'appropriate', 'fit',
-            'ready', 'prepared', 'set', 'done', 'finished', 'complete',
-            'incomplete', 'partial', 'half', 'full', 'empty', 'whole',
-            'total', 'complete', 'entire', 'absolute', 'utter', 'sheer',
-            'pure', 'clean', 'clear', 'transparent', 'opaque', 'solid',
-            'liquid', 'gas', 'plasma', 'energy', 'matter', 'substance',
-            'material', 'stuff', 'thing', 'object', 'item', 'product',
-            'goods', 'merchandise', 'commodity', 'ware', 'article',
-            'piece', 'unit', 'part', 'component', 'element', 'factor',
-            'aspect', 'feature', 'characteristic', 'quality', 'property',
-            'attribute', 'trait', 'detail', 'point', 'particular', 'specific',
-            'general', 'universal', 'common', 'usual', 'normal', 'standard',
-            'typical', 'regular', 'ordinary', 'average', 'median', 'mean',
-            'mode', 'range', 'scope', 'scale', 'degree', 'extent', 'level',
-            'grade', 'rank', 'class', 'category', 'group', 'set', 'type',
-            'kind', 'sort', 'variety', 'form', 'shape', 'size', 'color',
-            'colour', 'tone', 'hue', 'shade', 'tint', 'pigment', 'dye',
-            'paint', 'coat', 'cover', 'layer', 'film', 'skin', 'shell',
-            'crust', 'surface', 'face', 'side', 'edge', 'border', 'boundary',
-            'limit', 'bound', 'confine', 'end', 'tip', 'top', 'bottom',
-            'base', 'foot', 'root', 'core', 'heart', 'center', 'middle',
-            'midst', 'interior', 'inside', 'within', 'inner', 'internal',
-            'exterior', 'outside', 'outer', 'external', 'surface', 'outward',
-            'up', 'down', 'left', 'right', 'forward', 'backward', 'ahead',
-            'behind', 'beyond', 'above', 'below', 'under', 'over', 'across',
-            'through', 'into', 'onto', 'upon', 'off', 'out', 'in', 'on',
-            'at', 'by', 'near', 'beside', 'next', 'close', 'far', 'distant',
-            'remote', 'local', 'native', 'foreign', 'domestic', 'home',
-            'away', 'abroad', 'overseas', 'internal', 'external', 'national',
-            'international', 'global', 'worldwide', 'universal', 'cosmic',
-            'planetary', 'solar', 'lunar', 'stellar', 'galactic', 'atomic',
-            'nuclear', 'molecular', 'cellular', 'organic', 'biological',
-            'natural', 'artificial', 'synthetic', 'man-made', 'human-made',
-            'machine', 'mechanical', 'automatic', 'manual', 'handmade',
-            'homemade', 'custom', 'bespoke', 'tailor-made', 'made-to-order',
-            'prefab', 'prefabricated', 'mass-produced', 'factory-made',
-            'industrial', 'commercial', 'retail', 'wholesale', 'bulk',
-            'individual', 'personal', 'private', 'public', 'shared',
-            'collective', 'joint', 'mutual', 'common', 'communal',
-            'social', 'societal', 'cultural', 'political', 'economic',
-            'financial', 'monetary', 'fiscal', 'budgetary', 'commercial',
-            'business', 'corporate', 'enterprise', 'industrial', 'manufacturing',
-            'production', 'construction', 'engineering', 'technical',
-            'technological', 'digital', 'electronic', 'electric', 'electrical',
-            'mechanical', 'chemical', 'physical', 'biological', 'medical',
-            'health', 'wellness', 'fitness', 'nutrition', 'dietary',
-            'culinary', 'gastronomic', 'food', 'beverage', 'drink',
-            'alcoholic', 'non-alcoholic', 'soft', 'hard', 'strong',
-            'weak', 'diluted', 'concentrated', 'pure', 'mixed', 'blended',
-            'shaken', 'stirred', 'frozen', 'chilled', 'hot', 'warm',
-            'cold', 'cool', 'icy', 'burning', 'boiling', 'steaming',
-            'smoking', 'flaming', 'sparking', 'glowing', 'shining',
-            'bright', 'dim', 'dark', 'light', 'heavy', 'weighty',
-            'lightweight', 'featherweight', 'heavyweight', 'middleweight',
-            'welterweight', 'light-middle', 'cruiserweight', 'bantam',
-            'flyweight', 'strawweight', 'atomweight', 'minimum',
-            'mini', 'micro', 'nano', 'pico', 'femto', 'atto',
-            'zepto', 'yocto', 'deci', 'centi', 'milli', 'kilo',
-            'mega', 'giga', 'tera', 'peta', 'exa', 'zetta', 'yotta',
-            'byte', 'bit', 'pixel', 'dot', 'point', 'inch', 'foot',
-            'yard', 'mile', 'meter', 'centimeter', 'millimeter',
-            'kilometer', 'gram', 'kilogram', 'ton', 'pound', 'ounce',
-            'liter', 'milliliter', 'gallon', 'quart', 'pint', 'cup',
-            'tablespoon', 'teaspoon', 'drop', 'dash', 'pinch', 'smidgen',
-            'handful', 'mouthful', 'spoonful', 'bucketful', 'tubful',
-            'truckload', ' shipload', 'boatload', 'cartload', 'wagonload',
-            'army', 'navy', 'air force', 'marine', 'coast guard',
-            'police', 'sheriff', 'constable', 'marshal', 'ranger',
-            'trooper', 'deputy', 'officer', 'agent', 'detective',
-            'inspector', 'sergeant', 'lieutenant', 'captain', 'major',
-            'colonel', 'general', 'admiral', 'commander', 'chief',
-            'president', 'vice', 'prime', 'minister', 'secretary',
-            'treasurer', 'auditor', 'clerk', 'secretary', 'assistant',
-            'associate', 'partner', 'member', 'affiliate', 'ally',
-            'friend', 'enemy', 'rival', 'competitor', 'opponent',
-            'adversary', 'antagonist', 'protagonist', 'hero', 'villain',
-            'victim', 'survivor', 'witness', 'bystander', 'spectator',
-            'audience', 'crowd', 'mob', 'gang', 'crew', 'team',
-            'squad', 'unit', 'platoon', 'company', 'battalion',
-            'regiment', 'brigade', 'division', 'corps', 'army',
-            'force', 'legion', 'horde', 'swarm', 'flock', 'herd',
-            'pack', 'pride', 'school', 'shoal', 'colony', 'nest',
-            'hive', 'den', 'lair', 'burrow', 'hole', 'cave',
-            'tunnel', 'passage', 'channel', 'canal', 'duct', 'pipe',
-            'tube', 'cylinder', 'barrel', 'drum', 'tank', 'vat',
-            'tub', 'basin', 'bowl', 'dish', 'plate', 'tray',
-            'platter', 'saucer', 'cup', 'mug', 'glass', 'tumbler',
-            'goblet', 'chalice', 'flute', 'stein', 'tankard', 'flagon',
-            'jar', 'jug', 'pitcher', 'ewer', 'carafe', 'decanter',
-            'bottle', 'flask', 'vial', 'phial', 'ampoule', 'capsule',
-            'tablet', 'pill', 'lozenge', 'pastille', 'troche', 'drop',
-            'globule', 'bead', 'pearl', 'grain', 'kernel', 'seed',
-            'nut', 'pit', 'stone', 'rock', 'pebble', 'cobble',
-            'boulder', 'slab', 'block', 'brick', 'tile', 'slate',
-            'shingle', 'panel', 'board', 'plank', 'beam', 'timber',
-            'log', 'stick', 'rod', 'pole', 'staff', 'stave', 'club',
-            'bat', 'racket', 'paddle', 'oar', 'scull', 'sweep',
-            'spade', 'shovel', 'hoe', 'rake', 'fork', 'pitchfork',
-            'sickle', 'scythe', 'machete', 'cleaver', 'hatchet',
-            'axe', 'ax', 'pick', 'pickaxe', 'mattock', 'crowbar',
-            'pry', 'wrench', 'spanner', 'plier', 'tongs', 'forceps',
-            'clamp', 'vise', 'grip', 'holder', 'stand', 'rack',
-            'shelf', 'ledge', 'mantel', 'sill', 'threshold', 'doorstep',
-            'stoop', 'porch', 'veranda', 'patio', 'deck', 'balcony',
-            'terrace', 'gallery', 'colonnade', 'arcade', 'cloister',
-            'courtyard', 'quad', 'plaza', 'square', 'piazza', 'forum',
-            'market', 'bazaar', 'souk', 'mall', 'plaza', 'center',
-            'complex', 'compound', 'enclosure', 'park', 'garden',
-            'yard', 'lawn', 'meadow', 'pasture', 'field', 'paddock',
-            'corral', 'pen', 'fold', 'coop', 'hutch', 'cage', 'crate',
-            'box', 'case', 'casket', 'coffin', 'sarcophagus', 'urn',
-            'vase', 'pot', 'kettle', 'cauldron', 'caldron', 'crucible',
-            'retort', 'flask', 'beaker', 'test tube', 'pipette',
-            'burette', 'funnel', 'filter', 'sieve', 'screen', 'mesh',
-            'net', 'web', 'trap', 'snare', 'noose', 'lasso', 'rope',
-            'cord', 'string', 'thread', 'yarn', 'fiber', 'filament',
-            'strand', 'ribbon', 'tape', 'band', 'strip', 'belt',
-            'sash', 'girdle', 'cummerbund', 'waistband', 'headband',
-            'wristband', 'armband', 'anklet', 'bracelet', 'bangle',
-            'chain', 'necklace', 'pendant', 'locket', 'medallion',
-            'charm', 'bead', 'gem', 'jewel', 'stone', 'crystal',
-            'diamond', 'ruby', 'sapphire', 'emerald', 'pearl', 'opal',
-            'jade', 'amber', 'coral', 'ivory', 'ebony', 'mahogany',
-            'teak', 'oak', 'pine', 'maple', 'birch', 'ash', 'elm',
-            'beech', 'cedar', 'redwood', 'sequoia', 'willow', 'poplar',
-            'aspen', 'cottonwood', 'sycamore', 'chestnut', 'walnut',
-            'hickory', 'pecan', 'almond', 'cashew', 'pistachio',
-            'macadamia', 'brazil nut', 'hazelnut', 'filbert', 'acorn',
-            'pine nut', 'coconut', 'date', 'fig', 'raisin', 'currant',
-            'prune', 'apricot', 'peach', 'plum', 'cherry', 'berry',
-            'grape', 'melon', 'citrus', 'lime', 'lemon', 'orange',
-            'tangerine', 'clementine', 'mandarin', 'kumquat', 'pomelo',
-            'grapefruit', 'citron', 'bergamot', 'yuzu', 'sudachi',
-            'kabosu', 'calamansi', 'calamondin', 'limequat', 'rangpur',
-            'tangelo', 'ugli', 'minneola', 'ortanique', 'jaffa',
-            'shamouti', 'blood orange', 'navel', 'valencia', 'cara cara',
-            'hamlin', 'parson brown', 'pineapple', 'pine', 'apple',
-            'pear', 'quince', 'medlar', 'loquat', 'kumquat', 'persimmon',
-            'pomegranate', 'guava', 'papaya', 'mango', 'lychee',
-            'longan', 'rambutan', 'mangosteen', 'durian', 'jackfruit',
-            'breadfruit', 'cacao', 'coffee', 'tea', 'mate', 'kola',
-            'guarana', 'yaupon', 'holly', 'olive', 'palm', 'date palm',
-            'coconut palm', 'oil palm', 'betel', 'areca', 'nipah',
-            'raffia', 'carnauba', 'copaiba', 'babassu', 'murumuru',
-            'tucuma', 'bacuri', 'cupuacu', 'acai', 'buriti', 'ucuhuba'
-        ];
+        const allRaw = [...smmServices, ...peakerServices];
 
-        // Scoring function: higher = better for our business
-        function scoreService(s) {
-            const text = `${s.name || ''} ${s.category || ''}`.toLowerCase();
-            const rawName = String(s.name || '');
-            let score = 0;
-            const rate = parseFloat(s.rate) || 999;
-            const minQty = parseInt(s.min) || 999999;
-            const maxQty = parseInt(s.max) || 0;
-
-            // === SPEED BONUSES ===
-            const speedBonuses = [
-                'instant', 'immediate', 'fast', 'speedy', 'quick', 'rapid',
-                'swift', 'express', 'rush', 'flash', '0-1h', '0-1 hour',
-                '0-3h', '0-6h', '0-12h', '0-12 hour', '1-24h', '1-24 hour',
-                '0-30m', '0-30 min', 'within 1 hour', 'within 3 hours',
-                'auto start', 'auto refill', 'automatic', 'non-stop',
-                'super fast', 'ultra fast', 'hyper fast', 'lightning',
-                'real time', 'live', 'active now', 'online now'
-            ];
-            speedBonuses.forEach(kw => { if (text.includes(kw)) score += 25; });
-
-            // === SPEED PENALTIES ===
-            const speedPenalties = [
-                'gradual', 'slow', 'drip', 'drip feed', 'delayed',
-                '1-3 day', '2-3 day', '3-5 day', '5-7 day', '7-14 day',
-                'weekly', 'monthly', 'scheduled', 'batch', 'queue',
-                'waiting', 'pending start', 'manual start', 'not instant',
-                'hours to days', 'days to weeks', 'organic growth'
-            ];
-            speedPenalties.forEach(kw => { if (text.includes(kw)) score -= 40; });
-
-            // === PROFITABILITY ===
-            // Lower rate = cheaper for us = more margin
-            if (rate < 0.3) score += 30;
-            else if (rate < 0.6) score += 20;
-            else if (rate < 1.0) score += 15;
-            else if (rate < 1.5) score += 10;
-            else if (rate < 2.0) score += 5;
-            else if (rate > 5.0) score -= 15;
-            else if (rate > 10.0) score -= 30;
-            else if (rate > 20.0) score -= 50;
-
-            // === QUANTITY FLEXIBILITY ===
-            if (maxQty >= 50000) score += 10;
-            else if (maxQty >= 10000) score += 7;
-            else if (maxQty >= 5000) score += 5;
-            else if (maxQty >= 1000) score += 3;
-            else if (maxQty < 500) score -= 5;
-
-            if (minQty <= 10) score += 10;
-            else if (minQty <= 50) score += 7;
-            else if (minQty <= 100) score += 5;
-            else if (minQty <= 500) score += 2;
-            else if (minQty > 1000) score -= 10;
-
-            // === QUALITY SIGNALS ===
-            if (text.includes('refill')) score += 8;
-            if (text.includes('non drop')) score += 8;
-            if (text.includes('no drop')) score += 8;
-            if (text.includes('lifetime')) score += 5;
-            if (text.includes('permanent')) score += 5;
-            if (text.includes('real')) score += 3;
-            if (text.includes('active')) score += 3;
-            if (text.includes('hq')) score += 2;
-            if (text.includes('high quality')) score += 2;
-
-            // === NEGATIVE SIGNALS ===
-            if (text.includes('bot')) score -= 5;
-            if (text.includes('fake')) score -= 10;
-            if (text.includes('proxy')) score -= 5;
-            if (text.includes('vpn')) score -= 5;
-            if (text.includes('cracked')) score -= 20;
-            if (text.includes('hacked')) score -= 30;
-            if (text.includes('stolen')) score -= 50;
-
-            // === COUNTRY/GEO PENALTY ===
-            const geoWords = ['nigeria','india','brazil','russia','bangladesh','pakistan','egypt','kenya','ghana','uganda','tanzania','ethiopia','vietnam','indonesia','philippines'];
-            geoWords.forEach(g => { if (text.includes(g)) score -= 100; });
-
-            // === BANNED EXACT MATCHES ===
-            if (banned.some(b => text.includes(b))) score -= 200;
-
-            return score;
-        }
-
-        // Step 1: Filter valid services and score them
-        const scoredServices = [];
-        for (const s of services) {
-            const id = Number(s.service);
-            if (!id) continue;
-
+        // Filter valid services
+        const validServices = [];
+        for (const s of allRaw) {
             const text = `${s.category || ''} ${s.name || ''}`.toLowerCase();
-
             const hasPlatform = platforms.some(p => text.includes(p));
-            if (!hasPlatform) continue;
-
             const hasAction = actions.some(a => text.includes(a));
-            if (!hasAction) continue;
-
-            // Skip if banned
-            if (banned.some(b => text.includes(b))) continue;
-
-            const score = scoreService(s);
-            if (score < -50) continue; // Too bad even to consider
-
-            scoredServices.push({
-                serviceId: id,
-                raw: s,
-                score,
-                platform: detectPlatform({ category: s.category, name: s.name }),
-                type: detectType({ category: s.category, name: s.name }),
-                rate: parseFloat(s.rate) || 0,
-                min: parseInt(s.min) || 0,
-                max: parseInt(s.max) || 0,
-                refill: !!s.refill,
-                cancel: !!s.cancel
-            });
+            if (!hasPlatform || !hasAction) continue;
+            if (isBanned(text)) continue;
+            if (s.score < -50) continue;
+            validServices.push(s);
         }
 
-        // Step 2: Group by (platform, type) and pick winner per group
-        const groups = new Map();
-        for (const s of scoredServices) {
-            const key = `${s.platform}_${s.type}`;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key).push(s);
+        // Group by (platform, type, provider) and pick best per provider
+        const byPlatformTypeProvider = new Map();
+        for (const s of validServices) {
+            const plat = detectPlatform({ category: s.category, name: s.name });
+            const typ = detectType({ category: s.category, name: s.name });
+            const key = `${plat}_${typ}_${s.provider}`;
+            if (!byPlatformTypeProvider.has(key)) byPlatformTypeProvider.set(key, []);
+            byPlatformTypeProvider.get(key).push(s);
         }
 
-        const winners = [];
-        for (const [key, group] of groups) {
-            // Sort by score descending, then by rate ascending (cheaper = better tiebreak)
+        // Pick winner per provider per platform/type
+        const providerWinners = [];
+        for (const [key, group] of byPlatformTypeProvider) {
             group.sort((a, b) => {
                 if (b.score !== a.score) return b.score - a.score;
                 return a.rate - b.rate;
             });
-            winners.push(group[0]); // Take the best one only
+            providerWinners.push(group[0]);
         }
 
-        // Step 3: Clean names and build final list
-        const cleanServices = winners.map(w => {
-            const s = w.raw;
-            let displayName = cleanServiceName({ category: s.category, name: s.name });
+        // Group by (platform, type) to merge providers
+        const byPlatformType = new Map();
+        for (const s of providerWinners) {
+            const plat = detectPlatform({ category: s.category, name: s.name });
+            const typ = detectType({ category: s.category, name: s.name });
+            const key = `${plat}_${typ}`;
+            if (!byPlatformType.has(key)) byPlatformType.set(key, []);
+            byPlatformType.get(key).push(s);
+        }
 
-            let cleanName = String(s.name || '');
-            noiseWords.forEach(word => {
+        // Build final services with options array
+        const cleanServices = [];
+        let serviceIdCounter = 1000;
+
+        for (const [key, group] of byPlatformType) {
+            const [plat, typ] = key.split('_');
+            const platformName = PLATFORM_META[plat]?.name || plat;
+            const typeName = typ === 'other' ? 'Boost' : typ.charAt(0).toUpperCase() + typ.slice(1);
+            const displayName = `${platformName} ${typeName}`;
+
+            // Clean name
+            let cleanName = group[0].name;
+            const noise = ['100% active real', '100% real humans', 'active real', 'real humans', 'real', 'active',
+                'hq', 'high quality', 'cheapest', 'cheap', 'fast', 'speed', 'stable', 'new', 'online',
+                'instant', 'quick', 'super', 'ultra', 'premium', 'best', 'top', 'guaranteed',
+                'non drop', 'no drop', 'drop', 'lifetime', 'permanent', 'organic', 'natural',
+                'worldwide', 'global', 'international', 'mixed', 'random', 'targeted',
+                'start', '0-1 hour', '0-12 hour', '1-24 hour', 'up to', 'within', 'delivery',
+                'daily', 'instantly', 'auto', 'gradual', 'drip feed', 'slow', 'normal', 'express',
+                'extra', 'bonus', 'free', 'gift', 'trial', 'test', 'sample', 'demo',
+                'refill', 'refillable', '30 days', '90 days', '180 days',
+                'working', 'functioning', 'operational', 'updated', 'latest', 'version',
+                'server', 'panel', 'api', 'smm', 'reseller', 'provider', 'supplier',
+                'max', 'min', 'minimum', 'maximum', 'limit', 'range', 'qty', 'quantity',
+                'per day', 'per hour', 'per minute', 'per second', 'hourly', 'daily',
+                'source', 'method', 'type', 'category', 'class', 'tier', 'level',
+                'bot', 'script', 'software', 'tool', 'program', 'app', 'botting',
+                'male', 'female', 'gender', 'age', 'demographic', 'niche', 'interest',
+                'arab', 'african', 'asian', 'european', 'american', 'latin',
+                'usa', 'uk', 'ca', 'au', 'eu', 'asia', 'africa', 'latam',
+                'old', 'aged', 'fresh', 'newly created', 'pva', 'phone verified',
+                'non pva', 'email verified', 'verified', 'unverified', 'blank',
+                'profile pic', 'bio', 'posts', 'story', 'highlight', 'reel',
+                'private', 'public', 'open', 'closed', 'secret', 'hidden',
+                'group', 'channel', 'page', 'account', 'profile', 'user',
+                'custom', 'personalized', 'tailored', 'bespoke', 'unique',
+                'high', 'low', 'medium', 'standard', 'basic', 'advanced', 'pro',
+                'vip', 'elite', 'exclusive', 'premium', 'gold', 'silver', 'bronze',
+                'starter', 'beginner', 'intermediate', 'expert', 'master', 'legend',
+                'package', 'bundle', 'combo', 'deal', 'offer', 'promo', 'sale',
+                'discount', 'special', 'limited', 'flash', 'mega', 'super', 'hyper',
+                'ultra', 'extreme', 'ultimate', 'supreme', 'max', 'plus', 'extra',
+                'lite', 'mini', 'micro', 'nano', 'small', 'medium', 'large', 'xl',
+                '1k', '2k', '5k', '10k', '50k', '100k', '1m', 'per 1k', 'per 1000',
+                '₹', '$', '€', '£', '¥', 'usd', 'eur', 'gbp', 'inr', 'idr', 'rub',
+                'just', 'only', 'merely', 'simply', 'purely', 'exactly', 'precisely',
+                'about', 'around', 'approximately', 'roughly', 'nearly', 'almost',
+                'more than', 'less than', 'over', 'under', 'below', 'above',
+                'from', 'to', 'between', 'and', 'or', 'with', 'without', 'plus',
+                'including', 'excluding', 'except', 'besides', 'apart from'];
+
+            noise.forEach(word => {
                 const re = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
                 cleanName = cleanName.replace(re, '');
             });
             cleanName = cleanName.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
             cleanName = cleanName.replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, '').replace(/\s+/g, ' ').trim();
-            cleanName = cleanName.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').replace(/\s+/g, ' ').trim(); // Strip emojis
+            cleanName = cleanName.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').replace(/\s+/g, ' ').trim();
 
-            return {
-                serviceId: w.serviceId,
+            const options = group.map(g => ({
+                provider: g.provider,
+                providerServiceId: g.providerServiceId,
+                rate: g.rate,
+                min: g.min,
+                max: g.max,
+                refill: g.refill,
+                cancel: g.cancel,
+                deliveryMinutes: g.deliveryMinutes,
+                reliabilityScore: 100
+            }));
+
+            cleanServices.push({
+                serviceId: serviceIdCounter++,
                 name: cleanName || displayName,
                 displayName: displayName,
-                type: String(s.type || ''),
-                category: String(s.category || ''),
-                rate: String(s.rate || ''),
-                min: String(s.min || ''),
-                max: String(s.max || ''),
-                refill: w.refill,
-                cancel: w.cancel
-            };
-        });
+                type: typ,
+                category: plat,
+                platform: plat,
+                options: options,
+                banned: false
+            });
+        }
 
         await Service.deleteMany({});
         if (cleanServices.length > 0) {
             await Service.insertMany(cleanServices, { ordered: false });
         }
 
-        console.log(`[SYNC] ${services.length} raw → ${scoredServices.length} scored → ${winners.length} winners (1 per platform/type)`);
-        res.json({ success: true, count: cleanServices.length, breakdown: `${services.length} raw → ${winners.length} unique services` });
+        console.log(`[SYNC] ${allRaw.length} raw → ${validServices.length} valid → ${providerWinners.length} provider winners → ${cleanServices.length} unique services`);
+        res.json({ success: true, count: cleanServices.length, breakdown: `${allRaw.length} raw → ${cleanServices.length} unique services` });
     } catch (err) {
         console.error('Sync error:', err.message);
         res.status(500).json({ error: 'Sync failed', detail: err.message });
@@ -1721,7 +1721,7 @@ app.put('/api/pricing/config', validateInitData, async (req, res) => {
 app.get('/api/store/services', validateInitData, async (req, res) => {
     const store = await getDefaultStore();
     if (!store) return res.status(404).json({ error: 'Store not configured' });
-    const globalServices = await Service.find().sort({ category: 1, serviceId: 1 });
+    const globalServices = await Service.find({ banned: { $ne: true } }).sort({ category: 1, serviceId: 1 });
     const enabledMap = new Map((store.enabledServices || []).map(s => [s.serviceId, s]));
     const merged = globalServices.map(s => {
         const cfg = enabledMap.get(s.serviceId);
@@ -1731,11 +1731,8 @@ app.get('/api/store/services', validateInitData, async (req, res) => {
             rawName: s.name,
             category: s.category,
             type: s.type,
-            rate: s.rate,
-            min: s.min,
-            max: s.max,
-            refill: s.refill,
-            cancel: s.cancel,
+            platform: s.platform,
+            options: s.options || [],
             isEnabled: cfg?.isEnabled || false,
             customPrice: cfg?.customPrice || 0
         };
@@ -1773,7 +1770,9 @@ app.post('/api/orders/:orderId/refill', validateInitData, async (req, res) => {
     if (daysSince > 30) return res.status(400).json({ error: '30-day window expired' });
 
     try {
-        const smmRes = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'refill', order: order.smmOrderId }, { timeout: 30000 });
+        const apiUrl = order.provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
+        const apiKey = order.provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
+        const smmRes = await axios.post(apiUrl, { key: apiKey, action: 'refill', order: order.smmOrderId }, { timeout: 30000 });
         order.refillRequested = true;
         order.refillStatus = smmRes.data?.refill || smmRes.data?.status || 'Requested';
         await order.save();
@@ -1808,11 +1807,136 @@ app.get('/api/stats', validateInitData, async (req, res) => {
     });
 });
 
+// ==========================================
+// WEB CUSTOMER API (No Telegram Auth)
+// ==========================================
+app.get('/api/web/services', async (req, res) => {
+    const store = await getDefaultStore();
+    const enabled = store?.enabledServices?.filter(s => s.isEnabled) || [];
+    const services = await Service.find({ serviceId: { $in: enabled.map(s => s.serviceId) }, banned: { $ne: true } }).sort({ platform: 1, type: 1 });
+    res.json(services);
+});
+
+app.get('/api/web/store', async (req, res) => {
+    const store = await getDefaultStore();
+    if (!store) return res.status(404).json({ error: 'Store not configured' });
+    res.json({
+        botName: store.businessName,
+        welcomeMessage: store.welcomeMessage,
+        welcomePhoto: store.welcomePhoto,
+        supportLink: store.supportLink,
+        pricingConfig: store.pricingConfig || {}
+    });
+});
+
+app.post('/api/web/order/init', async (req, res) => {
+    const { serviceId, optionIdx, quantity, link, phone, customerName } = req.body;
+    if (!serviceId || optionIdx === undefined || !quantity || !link || !phone) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const store = await getDefaultStore();
+    if (!store) return res.status(404).json({ error: 'Store not configured' });
+
+    const svc = await Service.findOne({ serviceId });
+    if (!svc) return res.status(404).json({ error: 'Service not found' });
+
+    const options = svc.options || [];
+    const selectedOpt = options[optionIdx];
+    if (!selectedOpt) return res.status(404).json({ error: 'Option not found' });
+
+    const cfg = store.pricingConfig || {};
+    const price = Math.max(20, Math.ceil(calculateKESPrice(selectedOpt.rate, quantity, cfg) / 10) * 10);
+    const reference = `WEB${Date.now()}`;
+
+    // Create web session
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await WebSession.create({ sessionId, phone, customerName: customerName || 'Web Customer' });
+
+    // Create pending tx
+    await PendingTransaction.create({
+        reference, type: 'order', phone, amount: price, botId: store._id,
+        customerTelegramId: 0, // Web customer
+        serviceId, provider: selectedOpt.provider, providerServiceId: selectedOpt.providerServiceId,
+        serviceName: svc.displayName || cleanServiceName(svc), link, quantity
+    });
+
+    webPendingInputs.set(sessionId, {
+        reference, serviceId, provider: selectedOpt.provider, providerServiceId: selectedOpt.providerServiceId,
+        serviceName: svc.displayName || cleanServiceName(svc), link, quantity, price, phone
+    });
+
+    res.json({ success: true, reference, sessionId, price, serviceName: svc.displayName || cleanServiceName(svc) });
+});
+
+app.post('/api/web/pay/stk', async (req, res) => {
+    const { sessionId, reference } = req.body;
+    const state = webPendingInputs.get(sessionId);
+    if (!state) return res.status(400).json({ error: 'Session expired' });
+
+    const store = await getDefaultStore(true);
+    if (!store.megapayApiKey || !store.megapayEmail) {
+        return res.status(400).json({ error: 'Payment not configured' });
+    }
+
+    try {
+        const payload = {
+            api_key: store.megapayApiKey,
+            email: store.megapayEmail,
+            amount: state.price,
+            msisdn: state.phone,
+            callback_url: `${APP_URL}/api/megapay/webhook`,
+            description: `${store.businessName} — ${state.serviceName} (${state.quantity})`,
+            reference
+        };
+
+        const stkRes = await axios.post('https://megapay.co.ke/backend/v1/initiatestk', payload);
+        const respCode = stkRes.data?.ResponseCode ?? stkRes.data?.ResultCode ?? 1;
+
+        if (parseInt(respCode) !== 0) {
+            return res.status(400).json({ error: stkRes.data?.ResponseDescription || stkRes.data?.ResultDesc || 'Payment failed' });
+        }
+
+        await PendingTransaction.updateOne({ reference }, {
+            megapayTransactionId: stkRes.data?.transaction_request_id || '',
+            megapayMerchantRequestId: stkRes.data?.MerchantRequestID || '',
+            megapayCheckoutRequestId: stkRes.data?.CheckoutRequestID || ''
+        });
+
+        res.json({ success: true, message: 'STK push sent to your phone' });
+    } catch (err) {
+        console.error('Web STK Error:', err.message);
+        res.status(500).json({ error: 'Failed to initiate payment' });
+    }
+});
+
+app.get('/api/web/order/status', async (req, res) => {
+    const { reference } = req.query;
+    if (!reference) return res.status(400).json({ error: 'Missing reference' });
+
+    const tx = await PendingTransaction.findOne({ reference });
+    if (!tx) return res.status(404).json({ error: 'Order not found' });
+
+    const order = await Order.findOne({ reference });
+    res.json({ 
+        status: tx.status, 
+        orderStatus: order?.status || 'pending',
+        smmOrderId: order?.smmOrderId || null
+    });
+});
+
+// ==========================================
+// ROUTES
+// ==========================================
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', appUrl: APP_URL, timestamp: new Date().toISOString() });
 });
 
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -1839,7 +1963,9 @@ cron.schedule('*/15 * * * *', async () => {
     for (const order of orders) {
         if (!order.smmOrderId || order.smmOrderId === 'PENDING') continue;
         try {
-            const res = await axios.post(SMM_API_URL, { key: SMM_API_KEY, action: 'status', order: order.smmOrderId }, { timeout: 30000 });
+            const apiUrl = order.provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
+            const apiKey = order.provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
+            const res = await axios.post(apiUrl, { key: apiKey, action: 'status', order: order.smmOrderId }, { timeout: 30000 });
             const data = res.data;
             if (data && data.status) {
                 const oldStatus = order.status;
@@ -1876,7 +2002,9 @@ cron.schedule('*/15 * * * *', async () => {
                             msg = `📋 *Order Update*\n\nOrder ID: \`${order.smmOrderId}\`\nService: ${escapeMarkdown(order.serviceName)}\nStatus: *${data.status}*`;
                             if (data.remains) msg += `\nRemains: ${data.remains}`;
                         }
-                        await bot.api.sendMessage(order.customerTelegramId, msg, { parse_mode: "Markdown" });
+                        if (order.customerTelegramId) {
+                            await bot.api.sendMessage(order.customerTelegramId, msg, { parse_mode: "Markdown" });
+                        }
                     } catch (e) {}
                 }
             }
@@ -1901,6 +2029,7 @@ async function startServer() {
     app.listen(PORT, async () => {
         console.log(`🌐 Server listening on port ${PORT}`);
         console.log(`📱 Mini App: ${APP_URL}`);
+        console.log(`🌐 Website: ${APP_URL}`);
 
         let store = await BotInstance.findOne({ isDefault: true });
         if (!store) {
@@ -1913,6 +2042,7 @@ async function startServer() {
                     status: 'active',
                     businessName: bot.botInfo.first_name,
                     welcomeMessage: `Welcome to ${bot.botInfo.first_name}! Boost your social media presence. Choose a platform below.`,
+                    welcomePhoto: `${APP_URL}/welcome-default.jpg`,
                     adminAlertChatId: String(ADMIN_IDS[0] || ''),
                     expiresAt: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000)
                 });
