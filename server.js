@@ -1278,8 +1278,14 @@ bot.on('message:text', async (ctx) => {
 
             // Check for multiple provider options
             const options = customerState.data?.options || [];
+            // For old pre-sync data, serviceId WAS the SMM provider ID
+            // For new synced data (serviceId >= 1000), we must get providerServiceId from svc.options
+            let fallbackProviderId = customerState.data.serviceId;
+            if (svc && svc.options && svc.options.length > 0) {
+                fallbackProviderId = svc.options[0].providerServiceId;
+            }
             const effectiveOptions = options.length > 1 ? options : [{
-                provider: 'smmfollows', providerServiceId: customerState.data.serviceId,
+                provider: 'smmfollows', providerServiceId: fallbackProviderId,
                 rate, min, max, refill: false, deliveryMinutes: 240, reliabilityScore: 100
             }];
 
@@ -1486,23 +1492,93 @@ async function handleMegapayWebhook(req, res) {
             const apiUrl = provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
             const apiKey = provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
 
+            // Resolve the REAL provider service ID — never use internal serviceId as fallback
+            let providerServiceId = tx.providerServiceId;
+
+            // If not in tx, look up from Service document options
+            if (!providerServiceId && svc && svc.options && svc.options.length > 0) {
+                const matchingOpt = svc.options.find(o => o.provider === provider) || svc.options[0];
+                providerServiceId = matchingOpt?.providerServiceId;
+                console.log(`[WEBHOOK] Resolved providerServiceId from Service.options: ${providerServiceId}`);
+            }
+
+            // Last resort: for OLD pre-sync data, serviceId WAS the SMM ID
+            if (!providerServiceId && svc && svc.serviceId < 1000) {
+                providerServiceId = svc.serviceId;
+                console.log(`[WEBHOOK] Using legacy serviceId as providerServiceId: ${providerServiceId}`);
+            }
+
+            if (!providerServiceId) {
+                console.error(`[WEBHOOK] CRITICAL: Could not resolve providerServiceId for service ${tx.serviceId}`);
+            }
+
             let smmOrderId = null;
+            let smmError = null;
+
+            // Attempt 1: JSON payload
             try {
-                const smmRes = await axios.post(apiUrl, {
+                const payload = {
                     key: apiKey,
                     action: 'add',
-                    service: providerServiceId,
+                    service: String(providerServiceId),
                     link: tx.link,
-                    quantity: tx.quantity
-                }, { timeout: 30000 });
+                    quantity: Number(tx.quantity)
+                };
+                console.log(`[SMM-ADD] JSON Request → ${apiUrl}`, JSON.stringify(payload));
+                const smmRes = await axios.post(apiUrl, payload, { 
+                    timeout: 30000,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                console.log(`[SMM-ADD] JSON Response ←`, JSON.stringify(smmRes.data));
                 if (smmRes.data && smmRes.data.order) {
                     smmOrderId = String(smmRes.data.order);
                     console.log(`[WEBHOOK] SMM order placed: ${smmOrderId}`);
+                } else if (smmRes.data && smmRes.data.error) {
+                    smmError = `SMM API error: ${smmRes.data.error}`;
+                    console.error(`[WEBHOOK] SMM API rejected:`, smmRes.data);
                 } else {
+                    smmError = `SMM API returned no order. Response: ${JSON.stringify(smmRes.data)}`;
                     console.error(`[WEBHOOK] SMM add failed:`, smmRes.data);
                 }
             } catch (smmErr) {
-                console.error(`[WEBHOOK] SMM API error:`, smmErr.message);
+                smmError = `JSON request failed: ${smmErr.message}`;
+                console.error(`[WEBHOOK] SMM API error (JSON):`, smmErr.message);
+                if (smmErr.response) {
+                    console.error(`[WEBHOOK] SMM response status:`, smmErr.response.status);
+                    console.error(`[WEBHOOK] SMM response data:`, JSON.stringify(smmErr.response.data));
+                }
+
+                // Attempt 2: Form-encoded fallback (many SMM panels require this)
+                try {
+                    const params = new URLSearchParams();
+                    params.append('key', apiKey);
+                    params.append('action', 'add');
+                    params.append('service', String(providerServiceId));
+                    params.append('link', tx.link);
+                    params.append('quantity', String(tx.quantity));
+                    console.log(`[SMM-ADD] Form-encoded Request → ${apiUrl}`, params.toString());
+                    const smmRes2 = await axios.post(apiUrl, params.toString(), {
+                        timeout: 30000,
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                    });
+                    console.log(`[SMM-ADD] Form-encoded Response ←`, JSON.stringify(smmRes2.data));
+                    if (smmRes2.data && smmRes2.data.order) {
+                        smmOrderId = String(smmRes2.data.order);
+                        smmError = null;
+                        console.log(`[WEBHOOK] SMM order placed (form-encoded): ${smmOrderId}`);
+                    } else if (smmRes2.data && smmRes2.data.error) {
+                        smmError += ` | Form-encoded error: ${smmRes2.data.error}`;
+                        console.error(`[WEBHOOK] SMM API rejected (form-encoded):`, smmRes2.data);
+                    } else {
+                        smmError += ` | Form-encoded also returned no order: ${JSON.stringify(smmRes2.data)}`;
+                    }
+                } catch (smmErr2) {
+                    smmError += ` | Form-encoded failed: ${smmErr2.message}`;
+                    console.error(`[WEBHOOK] SMM API error (form-encoded):`, smmErr2.message);
+                    if (smmErr2.response) {
+                        console.error(`[WEBHOOK] SMM form-encoded response:`, JSON.stringify(smmErr2.response.data));
+                    }
+                }
             }
 
             const order = await Order.create({
@@ -1534,12 +1610,12 @@ async function handleMegapayWebhook(req, res) {
             });
 
             let successText = `🎉 *PAYMENT SUCCESSFUL!*\n\nThank you for your order!\n\n💰 *DETAILS*\n• Service: ${escapeMarkdown(order.serviceName)}\n• Quantity: ${order.quantity.toLocaleString()}\n• Link: ${escapeMarkdown(order.link)}\n• Amount: KES ${amount}\n• Receipt: ${receipt}\n• Order ID: \`${order.smmOrderId}\``;
-            if (smmOrderId) {
+            if (smmOrderId && smmOrderId !== 'PENDING') {
                 successText += `\n\n⏳ *Delivery:* Your order is now processing. Delivery times vary by platform and quantity (usually minutes, occasionally up to 24h for large orders).`;
                 successText += `\n\nYou can check your order status anytime below 👇`;
                 if (order.refillEligible) successText += `\n\n🔄 *Refill available* for 30 days. Use /refill ${order.smmOrderId} if drops occur.`;
             } else {
-                successText += `\n\n⚠️ *Auto-placement failed.* Admin will fulfill manually.`;
+                successText += `\n\n⚠️ *Auto-placement failed.*\n\n_Reason: ${escapeMarkdown(smmError || 'Unknown error')}_\n\nAdmin has been notified and will fulfill your order manually. Your payment is secure.`;
             }
 
             try {
@@ -1554,10 +1630,11 @@ async function handleMegapayWebhook(req, res) {
 
             if (store.adminAlertChatId) {
                 try {
-                    await bot.api.sendMessage(store.adminAlertChatId,
-                        `✅ *New Sale!*\n\n📦 ${escapeMarkdown(order.serviceName)}\n🔗 ${escapeMarkdown(order.link)}\n📊 ${order.quantity.toLocaleString()} qty\n💵 KES ${amount}\n🧾 ${receipt}\n📱 ${tx.phone}`,
-                        { parse_mode: "Markdown" }
-                    );
+                    let alertText = `✅ *New Sale!*\n\n📦 ${escapeMarkdown(order.serviceName)}\n🔗 ${escapeMarkdown(order.link)}\n📊 ${order.quantity.toLocaleString()} qty\n💵 KES ${amount}\n🧾 ${receipt}\n📱 ${tx.phone}`;
+                    if (smmError) {
+                        alertText += `\n\n⚠️ *AUTO-PLACEMENT FAILED*\n${escapeMarkdown(smmError)}\n\nProvider: ${provider}\nProviderServiceId: ${providerServiceId}\nServiceId: ${tx.serviceId}`;
+                    }
+                    await bot.api.sendMessage(store.adminAlertChatId, alertText, { parse_mode: "Markdown" });
                 } catch (e) { console.log('[WEBHOOK] Owner alert failed:', e.message); }
             }
 
