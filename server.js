@@ -1488,7 +1488,7 @@ async function handleMegapayWebhook(req, res) {
             const displayName = svc?.displayName || cleanServiceName(svc) || tx.serviceName || 'Unknown';
 
             const provider = tx.provider || 'smmfollows';
-            const providerServiceId = tx.providerServiceId || tx.serviceId;
+            // providerServiceId resolved below with proper fallback logic
             const apiUrl = provider === 'peaker' ? PEAKER_API_URL : SMM_API_URL;
             const apiKey = provider === 'peaker' ? PEAKER_API_KEY : SMM_API_KEY;
 
