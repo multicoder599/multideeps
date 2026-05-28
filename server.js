@@ -245,7 +245,7 @@ const webPendingInputs = new Map(); // sessionId -> state
 let defaultStore = null;
 
 // ==========================================
-// HELPERS
+// HELPERS  —  UNIFIED PRICING (FIXED)
 // ==========================================
 function escapeMarkdown(text) {
     if (!text) return '';
@@ -387,20 +387,22 @@ function getTypeKeyboard(services, platform) {
     return keyboard;
 }
 
-// Pricing engine
-function calculateKESPrice(rate, quantity, pricingConfig) {
+// ==========================================
+// UNIFIED PRICING ENGINE  —  SINGLE SOURCE OF TRUTH
+// ==========================================
+function calculateKESPrice(rate, quantity, pricingConfig, tierMultiplier = 1.0) {
     const r = parseFloat(rate) || 0;
     if (r <= 0 || quantity <= 0) return 0;
     const exchangeRate = pricingConfig?.exchangeRate || 130;
     const markup = pricingConfig?.markupMultiplier || 1.5;
     const costPer1kInKES = r * exchangeRate;
-    const pricePer1kInKES = costPer1kInKES * markup;
+    const pricePer1kInKES = costPer1kInKES * markup * tierMultiplier;
     const total = (pricePer1kInKES / 1000) * quantity;
     return Math.max(20, Math.ceil(total / 10) * 10);
 }
 
-function getTierDisplayPrice(rate, tierMax, pricingConfig) {
-    return calculateKESPrice(rate, tierMax, pricingConfig);
+function getTierDisplayPrice(rate, tierMax, pricingConfig, tierMultiplier = 1.0) {
+    return calculateKESPrice(rate, tierMax, pricingConfig, tierMultiplier);
 }
 
 // Main Menu Reply Keyboard (like VIP MPESA bot)
@@ -931,7 +933,9 @@ bot.on('callback_query:data', async (ctx) => {
             if (options.length > 0) {
                 bestRate = options.sort((a,b) => a.rate - b.rate)[0].rate;
             }
-            const startPrice = getTierDisplayPrice(bestRate, (cfg.tiers?.[0]?.maxQty || 500), cfg);
+            // FIX: include first-tier multiplier in "from" price so it matches what user will actually pay
+            const firstTier = cfg.tiers?.[0];
+            const startPrice = getTierDisplayPrice(bestRate, (firstTier?.maxQty || 500), cfg, firstTier?.multiplier);
             const rawLabel = `${displayName} — from KES ${startPrice}`;
             keyboard.text(btnText(rawLabel), `svc_${s.serviceId}`).row();
         }
@@ -981,14 +985,16 @@ bot.on('callback_query:data', async (ctx) => {
         text += `*Select your quantity tier:*\n`;
 
         tiers.forEach(t => {
-            const price = getTierDisplayPrice(bestRate, t.maxQty, cfg);
-            text += `• ${t.label}: ${t.minQty.toLocaleString()} - ${t.maxQty.toLocaleString()} qty\n`;
+            // FIX: include tier multiplier in displayed price
+            const price = getTierDisplayPrice(bestRate, t.maxQty, cfg, t.multiplier);
+            text += `• ${t.label}: ${t.minQty.toLocaleString()} - ${t.maxQty.toLocaleString()} qty — from KES ${price}\n`;
         });
         text += `\n_Price shown is for max tier qty. Actual price scales with your quantity._`;
 
         for (let i = 0; i < tiers.length; i++) {
             const tier = tiers[i];
-            const price = getTierDisplayPrice(bestRate, tier.maxQty, cfg);
+            // FIX: include tier multiplier in button price
+            const price = getTierDisplayPrice(bestRate, tier.maxQty, cfg, tier.multiplier);
             const btnLabel = `${tier.label} | ${tier.minQty.toLocaleString()}-${tier.maxQty.toLocaleString()} @ KES ${price}`;
             keyboard.text(btnText(btnLabel), `tier_${serviceId}_${i}`).row();
         }
@@ -1013,34 +1019,22 @@ bot.on('callback_query:data', async (ctx) => {
         const cfg = store.pricingConfig || {};
         const qty = state.data.quantity;
         const tierMultiplier = state.data.tierMultiplier || 1.0;
-        const exchangeRate = cfg?.exchangeRate || 130;
-        const markup = cfg?.markupMultiplier || 1.5;
-        const rawTotal = ((selectedOpt.rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
-        const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
+        // FIX: use unified pricing function
+        const adjustedPrice = calculateKESPrice(selectedOpt.rate, qty, cfg, tierMultiplier);
 
         state.data.selectedProvider = selectedOpt;
         state.data.price = adjustedPrice;
         state.action = 'awaiting_link';
 
         await ctx.reply(
-            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected
-
-` +
-            `📊 Quantity: *${qty.toLocaleString()}*
-` +
-            `💰 Price: *KES ${adjustedPrice}*
-
-` +
-            `Now send the link or username to promote:
-` +
-            `_Examples:_
-` +
-            `• Instagram: \`https://instagram.com/username\`
-` +
-            `• TikTok: \`https://tiktok.com/@username\`
-` +
-            `• YouTube: \`https://youtube.com/watch?v=xxx\`
-` +
+            `✅ *${selectedOpt.deliveryMinutes <= 60 ? '⚡ Fast' : (selectedOpt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard')}* selected\n\n` +
+            `📊 Quantity: *${qty.toLocaleString()}*\n` +
+            `💰 Price: *KES ${adjustedPrice}*\n\n` +
+            `Now send the link or username to promote:\n` +
+            `_Examples:_\n` +
+            `• Instagram: \`https://instagram.com/username\`\n` +
+            `• TikTok: \`https://tiktok.com/@username\`\n` +
+            `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
             `• Telegram: \`https://t.me/channelname\``,
             { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
         );
@@ -1097,7 +1091,7 @@ bot.on('callback_query:data', async (ctx) => {
             }
         });
 
-        const priceForMax = getTierDisplayPrice(selectedOpt.rate, tier.maxQty, cfg);
+        const priceForMax = getTierDisplayPrice(selectedOpt.rate, tier.maxQty, cfg, 1.0);
         const duration = formatDuration(selectedOpt.deliveryMinutes);
 
         await ctx.reply(
@@ -1149,7 +1143,7 @@ bot.on('callback_query:data', async (ctx) => {
             }
         });
 
-        const priceForMax = getTierDisplayPrice(effectiveRate, tier.maxQty, cfg);
+        const priceForMax = getTierDisplayPrice(effectiveRate, tier.maxQty, cfg, tier.multiplier);
         await ctx.reply(
             `${tier.label} selected ✅\n\n` +
             `Enter exact quantity between *${tier.minQty.toLocaleString()}* and *${tier.maxQty.toLocaleString()}*\n\n` +
@@ -1174,7 +1168,7 @@ bot.on('callback_query:data', async (ctx) => {
             if (options.length > 0) {
                 bestRate = options.sort((a,b) => a.rate - b.rate)[0].rate;
             }
-            const price = getTierDisplayPrice(bestRate, 500, cfg);
+            const price = getTierDisplayPrice(bestRate, 500, cfg, 1.0);
             const displayName = s.displayName || cleanServiceName(s);
             keyboard.text(btnText(`${displayName} — from KES ${price}`), `svc_${s.serviceId}`).row();
         });
@@ -1280,14 +1274,9 @@ bot.on('message:text', async (ctx) => {
 
             if (isNaN(qty) || qty < tierMin || qty > tierMax || qty < min || qty > max) {
                 await ctx.reply(
-                    `❌ Invalid quantity.
-
-` +
-                    `• Tier range: *${tierMin.toLocaleString()} - ${tierMax.toLocaleString()}*
-` +
-                    `• Service limits: ${min} - ${max}
-
-Please enter a valid quantity:`,
+                    `❌ Invalid quantity.\n` +
+                    `• Tier range: *${tierMin.toLocaleString()} - ${tierMax.toLocaleString()}*\n` +
+                    `• Service limits: ${min} - ${max}\n\nPlease enter a valid quantity:`,
                     { parse_mode: "Markdown" }
                 );
                 return;
@@ -1297,11 +1286,8 @@ Please enter a valid quantity:`,
             const tierMultiplier = parseFloat(tier?.multiplier) || 1.0;
             const rate = parseFloat(customerState.data?.rate) || 1;
 
-            // Unified pricing formula (same as website)
-            const exchangeRate = cfg?.exchangeRate || 130;
-            const markup = cfg?.markupMultiplier || 1.5;
-            const rawTotal = ((rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
-            const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
+            // FIX: use unified pricing function (same as display)
+            const adjustedPrice = calculateKESPrice(rate, qty, cfg, tierMultiplier);
 
             customerState.data.quantity = qty;
             customerState.data.price = adjustedPrice;
@@ -1330,31 +1316,21 @@ Please enter a valid quantity:`,
                 customerState.data.options = effectiveOptions;
                 customerState.action = 'awaiting_provider_choice';
 
-                let text = `📋 *Choose Delivery Speed*
-
-`;
-                text += `Quantity: *${qty.toLocaleString()}*
-`;
-                text += `Price: *KES ${adjustedPrice}*
-
-`;
-                text += `Select your preferred option:
-`;
+                let text = `📋 *Choose Delivery Speed*\n\n`;
+                text += `Quantity: *${qty.toLocaleString()}*\n`;
+                text += `Price: *KES ${adjustedPrice}*\n\n`;
+                text += `Select your preferred option:\n`;
 
                 const keyboard = new InlineKeyboard();
                 effectiveOptions.forEach((opt, idx) => {
-                    const optRawTotal = ((opt.rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
-                    const optPrice = Math.max(20, Math.ceil(optRawTotal / 10) * 10);
+                    // FIX: use unified pricing for each option
+                    const optPrice = calculateKESPrice(opt.rate, qty, cfg, tierMultiplier);
                     const duration = formatDuration(opt.deliveryMinutes);
                     const speedLabel = opt.deliveryMinutes <= 60 ? '⚡ Fast' : (opt.deliveryMinutes <= 360 ? '🔥 Quick' : '💰 Standard');
 
-                    text += `${idx+1}. ${speedLabel}
-`;
-                    text += `   KES ${optPrice} | ${duration}
-`;
-                    text += `   ${opt.provider === 'peaker' ? 'Premium' : 'Standard'} provider
-
-`;
+                    text += `${idx+1}. ${speedLabel}\n`;
+                    text += `   KES ${optPrice} | ${duration}\n`;
+                    text += `   ${opt.provider === 'peaker' ? 'Premium' : 'Standard'} provider\n\n`;
 
                     keyboard.text(btnText(`${speedLabel} | KES ${optPrice} | ${duration}`), `provider_${idx}`).row();
                 });
@@ -1369,21 +1345,13 @@ Please enter a valid quantity:`,
             customerState.action = 'awaiting_link';
 
             await ctx.reply(
-                `✅ *Quantity: ${qty.toLocaleString()}*
-` +
-                `💰 *Price: KES ${adjustedPrice}*
-
-` +
-                `Now send the link or username to promote:
-` +
-                `_Examples:_
-` +
-                `• Instagram: \`https://instagram.com/username\`
-` +
-                `• TikTok: \`https://tiktok.com/@username\`
-` +
-                `• YouTube: \`https://youtube.com/watch?v=xxx\`
-` +
+                `✅ *Quantity: ${qty.toLocaleString()}*\n` +
+                `💰 *Price: KES ${adjustedPrice}*\n\n` +
+                `Now send the link or username to promote:\n` +
+                `_Examples:_\n` +
+                `• Instagram: \`https://instagram.com/username\`\n` +
+                `• TikTok: \`https://tiktok.com/@username\`\n` +
+                `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
                 `• Telegram: \`https://t.me/channelname\``,
                 { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
             );
@@ -1402,12 +1370,8 @@ Please enter a valid quantity:`,
 
             if (isNaN(qty) || qty < min || qty > max) {
                 await ctx.reply(
-                    `❌ Invalid quantity.
-
-` +
-                    `• Range: *${min.toLocaleString()} - ${max.toLocaleString()}*
-
-Please enter a valid quantity:`,
+                    `❌ Invalid quantity.\n` +
+                    `• Range: *${min.toLocaleString()} - ${max.toLocaleString()}*\n\nPlease enter a valid quantity:`,
                     { parse_mode: "Markdown" }
                 );
                 return;
@@ -1415,13 +1379,10 @@ Please enter a valid quantity:`,
 
             const cfg = store.pricingConfig || {};
             const rate = parseFloat(optData?.rate) || 1;
-
-            // Unified pricing formula (same as website)
-            const exchangeRate = cfg?.exchangeRate || 130;
-            const markup = cfg?.markupMultiplier || 1.5;
             const tierMultiplier = optData?.tierMultiplier || 1.0;
-            const rawTotal = ((rate * exchangeRate * markup) / 1000) * qty * tierMultiplier;
-            const adjustedPrice = Math.max(20, Math.ceil(rawTotal / 10) * 10);
+
+            // FIX: use unified pricing function
+            const adjustedPrice = calculateKESPrice(rate, qty, cfg, tierMultiplier);
 
             optData.quantity = qty;
             optData.price = adjustedPrice;
@@ -1432,28 +1393,21 @@ Please enter a valid quantity:`,
             const duration = formatDuration(optData.deliveryMinutes || 240);
 
             await ctx.reply(
-                `✅ *Quantity: ${qty.toLocaleString()}*
-` +
-                `💰 *Price: KES ${adjustedPrice}*
-` +
-                `⏱️ *Delivery: ${duration}*
-
-` +
-                `Now send the link or username to promote:
-` +
-                `_Examples:_
-` +
-                `• Instagram: \`https://instagram.com/username\`
-` +
-                `• TikTok: \`https://tiktok.com/@username\`
-` +
-                `• YouTube: \`https://youtube.com/watch?v=xxx\`
-` +
+                `✅ *Quantity: ${qty.toLocaleString()}*\n` +
+                `💰 *Price: KES ${adjustedPrice}*\n` +
+                `⏱️ *Delivery: ${duration}*\n\n` +
+                `Now send the link or username to promote:\n` +
+                `_Examples:_\n` +
+                `• Instagram: \`https://instagram.com/username\`\n` +
+                `• TikTok: \`https://tiktok.com/@username\`\n` +
+                `• YouTube: \`https://youtube.com/watch?v=xxx\`\n` +
                 `• Telegram: \`https://t.me/channelname\``,
                 { parse_mode: "Markdown", reply_markup: new InlineKeyboard().text('🔙 Cancel', 'back_start') }
             );
             return;
-        }// === PROVIDER CHOICE ===
+        }
+
+        // === PROVIDER CHOICE ===
         if (customerState.action === 'awaiting_provider_choice') {
             await ctx.reply("⚠️ Please select a delivery speed option from the buttons above.");
             return;
@@ -2293,7 +2247,8 @@ app.post('/api/web/order/init', async (req, res) => {
     if (!selectedOpt) return res.status(404).json({ error: 'Option not found' });
 
     const cfg = store.pricingConfig || {};
-    const price = Math.max(20, Math.ceil(calculateKESPrice(selectedOpt.rate, quantity, cfg) / 10) * 10);
+    // FIX: use unified pricing function with base multiplier 1.0 (web has no tier selection)
+    const price = calculateKESPrice(selectedOpt.rate, quantity, cfg, 1.0);
     const reference = `WEB${Date.now()}`;
 
     // Create web session
