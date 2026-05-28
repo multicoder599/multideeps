@@ -906,7 +906,7 @@
 </div>
 
 <!-- Nav -->
-<nav class="nav">
+<<nav class="nav">
   <div class="nav-inner">
     <div class="logo">
       <span class="material-symbols-outlined" style="font-size:20px;-webkit-text-fill-color:var(--primary);">rocket_launch</span>
@@ -1213,7 +1213,7 @@
 </section>
 
 <!-- Footer -->
-<footer class="footer">
+<<footer class="footer">
   <p>© 2026 Multi Social Deeps. All rights reserved.</p>
   <p>Not affiliated with Instagram, TikTok, Twitter, Facebook, or YouTube.</p>
 </footer>
@@ -1330,7 +1330,6 @@ let allServices = [];
 let storeConfig = null;
 let currentPlatform = '';
 let currentService = null;
-let currentOptionIdx = 0;
 let currentSessionId = '';
 let currentReference = '';
 
@@ -1355,6 +1354,31 @@ const TYPE_LABELS = {
   comments: 'Comments',
   other: 'Boost'
 };
+
+// ==================== UNIFIED PRICING (matches server exactly) ====================
+function calculatePrice(rate, quantity, cfg) {
+  const r = parseFloat(rate) || 0;
+  if (r <= 0 || quantity <= 0) return 0;
+  
+  const exchangeRate = cfg?.exchangeRate || 130;
+  const markup = cfg?.markupMultiplier || 1.5;
+  
+  // Auto-determine tier multiplier from admin config based on quantity
+  let tierMultiplier = 1.0;
+  const tiers = cfg?.tiers || [];
+  for (const tier of tiers) {
+    if (quantity >= tier.minQty && quantity <= tier.maxQty) {
+      tierMultiplier = parseFloat(tier.multiplier) || 1.0;
+      break;
+    }
+  }
+  
+  const costPer1k = r * exchangeRate;
+  const pricePer1k = costPer1k * markup * tierMultiplier;
+  const total = (pricePer1k / 1000) * quantity;
+  
+  return Math.max(20, Math.ceil(total / 10) * 10);
+}
 
 // ==================== INIT ====================
 async function init() {
@@ -1459,23 +1483,22 @@ function renderPackages(platform) {
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
 
   grid.innerHTML = filtered.map((s, idx) => {
-    const options = s.options?.length ? s.options : [{
-      rate: parseFloat(s.rate) || 1, min: parseInt(s.min) || 50, max: parseInt(s.max) || 10000,
-      deliveryMinutes: 240, refill: s.refill || false
+    // Use copy so we don't mutate the original service options array
+    const options = s.options?.length ? [...s.options] : [{
+      rate: parseFloat(s.rate) || 1, 
+      min: parseInt(s.min) || 50, 
+      max: parseInt(s.max) || 10000,
+      deliveryMinutes: 240, 
+      refill: s.refill || false,
+      providerServiceId: s.serviceId,
+      provider: 'smmfollows'
     }];
-
+    
+    // Sort copy by rate to find cheapest for display
     const bestOpt = options.sort((a, b) => a.rate - b.rate)[0];
-    // Calculate price per 500 with correct tier multiplier
-    const basePricePer500 = (bestOpt.rate * (cfg.exchangeRate || 130) * (cfg.markupMultiplier || 1.5) / 1000) * 500;
-    let tierMultiplier = 1.0;
-    const tiers = cfg?.tiers || [];
-    for (const tier of tiers) {
-      if (500 >= tier.minQty && 500 <= tier.maxQty) {
-        tierMultiplier = parseFloat(tier.multiplier) || 1.0;
-        break;
-      }
-    }
-    const price = Math.max(20, Math.ceil((basePricePer500 * tierMultiplier) / 10) * 10);
+    
+    // Use unified pricing function (respects admin tier config)
+    const price = calculatePrice(bestOpt.rate, 500, cfg);
     const duration = bestOpt.deliveryMinutes < 60 ? `~${bestOpt.deliveryMinutes} min` : `~${Math.round(bestOpt.deliveryMinutes/60)} hrs`;
     const speedTag = bestOpt.deliveryMinutes <= 60 ? 'Fast' : (bestOpt.deliveryMinutes <= 360 ? 'Quick' : 'Standard');
     const typeLabel = TYPE_LABELS[s.type] || (s.type || 'Boost');
@@ -1492,7 +1515,7 @@ function renderPackages(platform) {
           <div class="pkg-meta-row"><span class="label">Refill</span><span class="value" style="color:${bestOpt.refill ? 'var(--success)' : 'var(--text-muted)'}">${bestOpt.refill ? '30 days' : 'No'}</span></div>
         </div>
         <div class="pkg-price">KES ${price}<span> / 500</span></div>
-        <button onclick="openOrderModal(${s.serviceId}, 0)">Order Now</button>
+        <button onclick="openOrderModal(${s.serviceId}, ${bestOpt.providerServiceId})">Order Now</button>
       </div>
     `;
   }).join('');
@@ -1509,16 +1532,25 @@ function renderPackages(platform) {
 }
 
 // ==================== MODALS ====================
-function openOrderModal(serviceId, optionIdx) {
+function openOrderModal(serviceId, providerServiceId) {
   const svc = allServices.find(s => s.serviceId === serviceId);
   if (!svc) return;
-  const opt = (svc.options?.length ? svc.options : [{
-    rate: parseFloat(svc.rate) || 1, min: parseInt(svc.min) || 50, max: parseInt(svc.max) || 10000,
-    deliveryMinutes: 240, refill: svc.refill || false
-  }])[optionIdx];
+  
+  // Find the exact option by providerServiceId to guarantee match with card
+  const options = svc.options?.length ? svc.options : [{
+    rate: parseFloat(svc.rate) || 1, 
+    min: parseInt(svc.min) || 50, 
+    max: parseInt(svc.max) || 10000,
+    deliveryMinutes: 240, 
+    refill: svc.refill || false,
+    providerServiceId: svc.serviceId,
+    provider: 'smmfollows'
+  }];
+  
+  const opt = options.find(o => o.providerServiceId == providerServiceId) || options[0];
+  if (!opt) return;
 
   currentService = svc;
-  currentOptionIdx = optionIdx;
   window.currentOpt = opt;
 
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
@@ -1541,29 +1573,6 @@ function openOrderModal(serviceId, optionIdx) {
   document.body.style.overflow = 'hidden';
 }
 
-function calculatePrice(rate, quantity, cfg) {
-  const r = parseFloat(rate) || 0;
-  if (r <= 0 || quantity <= 0) return 0;
-  const exchangeRate = cfg?.exchangeRate || 130;
-  const markup = cfg?.markupMultiplier || 1.5;
-  const costPer1k = r * exchangeRate;
-  const pricePer1k = costPer1k * markup;
-  let total = (pricePer1k / 1000) * quantity;
-
-  // Apply tier multiplier based on quantity (same as bot)
-  const tiers = cfg?.tiers || [];
-  let tierMultiplier = 1.0;
-  for (const tier of tiers) {
-    if (quantity >= tier.minQty && quantity <= tier.maxQty) {
-      tierMultiplier = parseFloat(tier.multiplier) || 1.0;
-      break;
-    }
-  }
-  total = total * tierMultiplier;
-
-  return Math.max(20, Math.ceil(total / 10) * 10);
-}
-
 function updateDynamicPrice() {
   const qtyInput = document.getElementById('order-qty');
   const btnPrice = document.getElementById('btn-price');
@@ -1581,7 +1590,7 @@ function updateDynamicPrice() {
   const cfg = storeConfig?.pricingConfig || { exchangeRate: 130, markupMultiplier: 1.5 };
   const price = calculatePrice(opt.rate, qty, cfg);
 
-  // Show which tier is active
+  // Show which tier is active (from admin config)
   const tiers = cfg?.tiers || [];
   let activeTier = null;
   for (const tier of tiers) {
@@ -1626,10 +1635,9 @@ async function submitOrder() {
   const qty = parseInt(document.getElementById('order-qty').value);
   const phone = document.getElementById('order-phone').value.trim().replace(/\D/g, '');
   const name = document.getElementById('order-name').value.trim();
-  const opt = window.currentOpt || (currentService.options?.length ? currentService.options : [{
-    rate: parseFloat(currentService.rate) || 1, min: parseInt(currentService.min) || 50, max: parseInt(currentService.max) || 10000
-  }])[currentOptionIdx];
-
+  const opt = window.currentOpt;
+  
+  if (!opt) { showToast('Please select a service', 'error'); return; }
   if (!link) { showToast('Please enter a link', 'error'); return; }
   if (!qty || isNaN(qty) || qty < opt.min || qty > opt.max) {
     showToast(`Quantity must be between ${opt.min} and ${opt.max}`, 'error');
@@ -1646,12 +1654,13 @@ async function submitOrder() {
     if (formattedPhone.startsWith('0')) formattedPhone = '254' + formattedPhone.slice(1);
     else if (!formattedPhone.startsWith('254')) formattedPhone = '254' + formattedPhone;
 
+    // Init order — send providerServiceId so server picks exact same option
     const initRes = await fetch(`${API_BASE}/api/web/order/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         serviceId: currentService.serviceId,
-        optionIdx: currentOptionIdx,
+        providerServiceId: opt.providerServiceId,
         quantity: qty,
         link,
         phone: formattedPhone,
@@ -1761,7 +1770,6 @@ function copyRef() {
       }, 2500);
     });
   } else {
-    // Fallback
     const ta = document.createElement('textarea');
     ta.value = text;
     document.body.appendChild(ta);

@@ -388,21 +388,28 @@ function getTypeKeyboard(services, platform) {
 }
 
 // ==========================================
-// UNIFIED PRICING ENGINE  —  SINGLE SOURCE OF TRUTH
+// UNIFIED PRICING ENGINE — SINGLE SOURCE OF TRUTH
 // ==========================================
-function calculateKESPrice(rate, quantity, pricingConfig, tierMultiplier = 1.0) {
+function calculateKESPrice(rate, quantity, pricingConfig) {
     const r = parseFloat(rate) || 0;
     if (r <= 0 || quantity <= 0) return 0;
     const exchangeRate = pricingConfig?.exchangeRate || 130;
     const markup = pricingConfig?.markupMultiplier || 1.5;
+    
+    // Auto-determine tier multiplier from admin config based on quantity
+    let tierMultiplier = 1.0;
+    const tiers = pricingConfig?.tiers || [];
+    for (const tier of tiers) {
+        if (quantity >= tier.minQty && quantity <= tier.maxQty) {
+            tierMultiplier = parseFloat(tier.multiplier) || 1.0;
+            break;
+        }
+    }
+    
     const costPer1kInKES = r * exchangeRate;
     const pricePer1kInKES = costPer1kInKES * markup * tierMultiplier;
     const total = (pricePer1kInKES / 1000) * quantity;
     return Math.max(20, Math.ceil(total / 10) * 10);
-}
-
-function getTierDisplayPrice(rate, tierMax, pricingConfig, tierMultiplier = 1.0) {
-    return calculateKESPrice(rate, tierMax, pricingConfig, tierMultiplier);
 }
 
 // Main Menu Reply Keyboard (like VIP MPESA bot)
@@ -2231,8 +2238,8 @@ app.get('/api/web/store', async (req, res) => {
 });
 
 app.post('/api/web/order/init', async (req, res) => {
-    const { serviceId, optionIdx, quantity, link, phone, customerName } = req.body;
-    if (!serviceId || optionIdx === undefined || !quantity || !link || !phone) {
+    const { serviceId, providerServiceId, quantity, link, phone, customerName } = req.body;
+    if (!serviceId || !providerServiceId || !quantity || !link || !phone) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -2243,12 +2250,12 @@ app.post('/api/web/order/init', async (req, res) => {
     if (!svc) return res.status(404).json({ error: 'Service not found' });
 
     const options = svc.options || [];
-    const selectedOpt = options[optionIdx];
+    const selectedOpt = options.find(o => o.providerServiceId == providerServiceId) || options[0];
     if (!selectedOpt) return res.status(404).json({ error: 'Option not found' });
 
     const cfg = store.pricingConfig || {};
-    // FIX: use unified pricing function with base multiplier 1.0 (web has no tier selection)
-    const price = calculateKESPrice(selectedOpt.rate, quantity, cfg, 1.0);
+    // Unified pricing — now auto-applies tier multiplier from admin config
+    const price = calculateKESPrice(selectedOpt.rate, quantity, cfg);
     const reference = `WEB${Date.now()}`;
 
     // Create web session
@@ -2258,7 +2265,7 @@ app.post('/api/web/order/init', async (req, res) => {
     // Create pending tx
     await PendingTransaction.create({
         reference, type: 'order', phone, amount: price, botId: store._id,
-        customerTelegramId: 0, // Web customer
+        customerTelegramId: 0,
         serviceId, provider: selectedOpt.provider, providerServiceId: selectedOpt.providerServiceId,
         serviceName: svc.displayName || cleanServiceName(svc), link, quantity
     });
