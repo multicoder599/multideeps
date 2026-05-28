@@ -1731,21 +1731,21 @@ async function trackOrder() {
     const res = await fetch(`${API_BASE}/api/web/order/status?reference=${ref}`).then(r => r.json());
     const statusColor = res.status === 'completed' ? 'var(--success)' : (res.status === 'failed' ? 'var(--danger)' : 'var(--warning)');
     resultDiv.innerHTML = `
-      <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:20px;margin-top:16px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;">
-          <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Reference</span>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;">${ref}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;">
-          <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Payment Status</span>
-          <span style="font-weight:700;color:${statusColor};font-size:12px;text-transform:capitalize;">${res.status || 'pending'}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Order Status</span>
-          <span style="font-weight:700;color:${res.orderStatus === 'Completed' ? 'var(--success)' : 'var(--primary)'};font-size:12px;">${res.orderStatus || 'pending'}</span>
-        </div>
-        ${res.smmOrderId ? `<div style="margin-top:12px;padding-top:12px;border-top:1.5px solid var(--border);font-size:11px;color:var(--text-muted);font-weight:500;">Provider Order ID: <span style="font-family:'JetBrains Mono',monospace;font-weight:600;">${res.smmOrderId}</span></div>` : ''}
-      </div>
+    <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:20px;margin-top:16px; margin-bottom: 90px;">
+  <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;">
+    <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Reference</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;">${ref}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;">
+    <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Payment Status</span>
+    <span style="font-weight:700;color:${statusColor};font-size:12px;text-transform:capitalize;">${res.status || 'pending'}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span style="color:var(--text-muted);font-size:12px;font-weight:600;">Order Status</span>
+    <span style="font-weight:700;color:${res.orderStatus === 'Completed' ? 'var(--success)' : 'var(--primary)'};font-size:12px;">${res.orderStatus || 'pending'}</span>
+  </div>
+  ${res.smmOrderId ? `<div style="margin-top:12px;padding-top:12px;border-top:1.5px solid var(--border);font-size:11px;color:var(--text-muted);font-weight:500;">Provider Order ID: <span style="font-family:'JetBrains Mono',monospace;font-weight:600;">${res.smmOrderId}</span></div>` : ''}
+</div>
     `;
   } catch (e) {
     resultDiv.innerHTML = '<div style="color:var(--danger);text-align:center;font-weight:600;">Order not found or error occurred.</div>';
