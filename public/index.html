@@ -826,48 +826,61 @@
     .pkg-card .pkg-price { font-size: 22px; }
     .step-card { padding: 20px; }
   }
-  /* Styling the button container */
-.floating-whatsapp {
+  /* Styling the premium button container */
+.smart-whatsapp {
   position: fixed;
   bottom: 30px;
-  right: 30px; /* Change to left: 30px if you want it on the left side */
+  right: 30px; 
   width: 60px;
   height: 60px;
-  background-color: #25D366; /* Official WhatsApp Green */
+  /* Using a modern gradient instead of flat color */
+  background: linear-gradient(135deg, #25D366, #1EBE5D);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  z-index: 1000; /* Keeps it above all other elements */
-  animation: jump 2s infinite; /* Triggers the jumping animation loop */
-  transition: transform 0.3s ease, background-color 0.3s ease;
+  /* Adds the glowing pulse effect */
+  animation: pulse-glow 2s infinite; 
+  transition: transform 0.3s ease, background 0.3s ease;
+  z-index: 1000;
 }
 
-/* Hover effect */
-.floating-whatsapp:hover {
-  background-color: #128C7E;
-  transform: scale(1.1);
-  animation-play-state: paused; /* Optional: Stops jumping when hovered */
-}
-
-/* Sizing and coloring the SVG icon */
-.floating-whatsapp svg {
-  width: 35px;
-  height: 35px;
+/* Perfecting the SVG size and color */
+.smart-whatsapp svg {
+  width: 32px;
+  height: 32px;
   fill: white;
+  /* Optional: gives the icon itself a tiny floating feel inside the circle */
+  animation: float-icon 3s ease-in-out infinite; 
 }
 
-/* The jumping up and down animation */
-@keyframes jump {
-  0%, 20%, 50%, 80%, 100% {
+/* Hover effect - grows slightly and stops pulsing to indicate it's clickable */
+.smart-whatsapp:hover {
+  transform: scale(1.1);
+  animation: none;
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.6);
+}
+
+/* The Glowing Pulse Ring Animation */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(37, 211, 102, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+  }
+}
+
+/* The Subtle Icon Float */
+@keyframes float-icon {
+  0%, 100% {
     transform: translateY(0);
   }
-  40% {
-    transform: translateY(-20px); /* Jumps up */
-  }
-  60% {
-    transform: translateY(-10px); /* Smaller secondary bounce */
+  50% {
+    transform: translateY(-2px);
   }
 }
 </style>
@@ -1796,10 +1809,9 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // Start
 init();
 </script>
-<a href="https://wa.me/254759277409" class="floating-whatsapp" target="_blank" rel="noopener noreferrer">
-  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16.005 0C7.168 0 0 7.168 0 16.005c0 2.802.735 5.54 2.13 7.973L.548 31.42l7.633-1.57C10.51 31.115 13.218 32 16.003 32 24.84 32 32 24.838 32 16.003 32 7.168 24.84 0 16.005 0zm0 29.3C13.626 29.3 11.33 28.665 9.3 27.464l-.666-.395-5.074 1.042 1.06-4.945-.435-.69C2.96 20.528 2.3 18.31 2.3 16.003c0-7.558 6.15-13.704 13.71-13.704 7.558 0 13.704 6.148 13.704 13.705S23.565 29.3 16.005 29.3z" />
-    <path d="M22.972 20.316c-.347-.174-2.062-1.02-2.383-1.137-.318-.116-.552-.174-.783.174-.23.348-.902 1.137-1.106 1.368-.202.23-.404.26-.75.087-1.802-.91-3.26-2.05-4.43-4.045-.116-.202-.012-.31.074-.4.075-.074.175-.202.262-.303.087-.103.116-.174.174-.29.058-.116.03-.218-.014-.304-.044-.087-.783-1.888-1.072-2.585-.282-.68-.57-.587-.783-.598-.202-.01-.434-.01-.666-.01-.23 0-.607.086-.926.434C10.23 12.65 9 13.824 9 16.143c0 2.32 1.244 4.56 1.417 4.793.174.23 3.268 4.992 7.918 7.004 3.018 1.3 4.024 1.085 4.75.912.923-.218 2.062-.843 2.352-1.655.29-.812.29-1.508.203-1.655-.088-.146-.318-.232-.666-.406z" />
+<a href="https://wa.me/254759277409" class="smart-whatsapp" target="_blank" rel="noopener noreferrer">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.82 9.82 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.81 11.81 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.88 11.88 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 0 0-3.48-8.413Z"/>
   </svg>
 </a>
 </body>
